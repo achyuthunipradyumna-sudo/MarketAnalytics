@@ -1,0 +1,2 @@
+Date,advances,declines,ad,ad_ma_50,ad_z_50,ad_ma_200,ad_z_200,ad_pct,pct_above_20dma,pct_above_50dma,pct_above_200dma,new_highs,new_lows,nh_pct,nl_pct,nhnl_net,nhnl_z,participation_label,dma_label,nhnl_label
+2025-12-24,1162,1840,-678,-258.98,-0.44886014885272657,-93.585,-0.5729460465931993,0.06752348643006263,47.44455159112825,30.729668916747027,33.494053359048536,72,50,2.3143683702989395,1.6072002571520412,0.7071681131468983,0.42738407262071915,neutral_participation,range_bound,balanced
