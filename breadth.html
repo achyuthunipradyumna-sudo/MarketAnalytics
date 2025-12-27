@@ -2,164 +2,187 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Market Breadth — Daily State</title>
+<title>Breadth Dashboard</title>
 
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-    margin: 20px;
-    background: #fff;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  margin: 16px;
+}
 
-  h2 { margin-bottom: 8px; }
+h2 {
+  margin-bottom: 8px;
+}
 
-  .controls {
-    margin-bottom: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-  }
+.controls {
+  margin-bottom: 12px;
+}
 
-  select, button {
-    padding: 6px 10px;
-    font-size: 14px;
-  }
+button, select {
+  padding: 6px 10px;
+  margin-right: 6px;
+  font-size: 14px;
+}
 
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 13px;
-  }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
 
-  th, td {
-    border: 1px solid #ddd;
-    padding: 6px;
-    text-align: right;
-    white-space: nowrap;
-  }
+th, td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  text-align: right;
+}
 
-  th {
-    background: #f4f4f4;
-    text-align: center;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
+th {
+  background: #f3f3f3;
+  position: sticky;
+  top: 0;
+}
 
-  td.date {
-    text-align: left;
-    font-weight: 600;
-  }
+td.date {
+  text-align: left;
+  font-weight: bold;
+}
 
-  /* Heatmap colors */
-  .pos-strong { background: #b6e3b6; }
-  .pos { background: #e6f4ea; }
-  .neg { background: #fde2e2; }
-  .neg-strong { background: #f5b7b7; }
+/* COLOR CODING */
+.pos { background: #e6f4ea; }     /* green */
+.neg { background: #fdecea; }     /* red */
+.neutral { background: #f7f7f7; }
 
-  .zero { background: #fff; }
-
+.small {
+  font-size: 11px;
+  color: #555;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Market Breadth — Participation & Internal Strength</h2>
+<h2>Market Breadth Dashboard</h2>
 
 <div class="controls">
-  <label>View:</label>
-  <select id="viewMode">
-    <option value="z">Z-Scores</option>
-    <option value="chg">Δ (20-Day Change)</option>
-  </select>
+  <strong>View:</strong>
+  <button onclick="setMode('raw')">Raw</button>
+  <button onclick="setMode('z')">Z-Scores</button>
 
-  <label>Lookback:</label>
-  <select id="lookback">
+  &nbsp;&nbsp;
+  <strong>Lookback:</strong>
+  <select onchange="setLookback(this.value)">
     <option value="30">1 Month</option>
     <option value="90">3 Months</option>
     <option value="180">6 Months</option>
-    <option value="365">1 Year</option>
-    <option value="all">Full History</option>
+    <option value="260">1 Year</option>
+    <option value="all" selected>Full History</option>
   </select>
 </div>
 
-<div style="overflow-x:auto">
-  <table id="breadthTable"></table>
+<div class="small">
+  Columns shown depend on selected mode.
 </div>
 
+<br>
+
+<table id="breadthTable"></table>
+
 <script>
-const DATA_URL = "data/history/breadth_full_history.csv";
+let RAW = [];
+let MODE = "raw";
+let LOOKBACK = "all";
 
-let rows = [];
-let headers = [];
-
-fetch(DATA_URL)
+fetch("data/history/breadth_full_history.csv")
   .then(r => r.text())
   .then(text => {
-    const lines = text.trim().split("\n");
-    headers = lines[0].split(",");
-    rows = lines.slice(1).map(r => {
+    const rows = text.trim().split("\n");
+    const header = rows[0].split(",");
+    RAW = rows.slice(1).map(r => {
       const v = r.split(",");
       let o = {};
-      headers.forEach((h, i) => o[h] = v[i]);
+      header.forEach((h, i) => o[h] = v[i]);
       return o;
     });
     render();
   });
 
-function heatClass(v) {
-  const x = parseFloat(v);
-  if (isNaN(x)) return "zero";
-  if (x >= 1.5) return "pos-strong";
-  if (x > 0) return "pos";
-  if (x <= -1.5) return "neg-strong";
-  if (x < 0) return "neg";
-  return "zero";
+function setMode(m) {
+  MODE = m;
+  render();
+}
+
+function setLookback(v) {
+  LOOKBACK = v;
+  render();
+}
+
+function sliceData() {
+  if (LOOKBACK === "all") return RAW;
+  return RAW.slice(-parseInt(LOOKBACK));
+}
+
+function colorClass(val) {
+  if (val > 0) return "pos";
+  if (val < 0) return "neg";
+  return "neutral";
 }
 
 function render() {
-  const view = document.getElementById("viewMode").value;
-  const lb = document.getElementById("lookback").value;
+  const data = sliceData();
+  const table = document.getElementById("breadthTable");
+  table.innerHTML = "";
 
-  let data = rows.slice();
-  if (lb !== "all") data = data.slice(-parseInt(lb));
+  let headers = ["Date"];
 
-  let cols;
-  if (view === "z") {
-    cols = [
-      ["ad_z_50", "AD Z(50)"],
-      ["pct_above_20dma_z", "%>20DMA Z"],
-      ["pct_above_50dma_z", "%>50DMA Z"],
-      ["pct_above_200dma_z", "%>200DMA Z"],
-      ["nhnl_z", "NH–NL Z"],
-      ["median_stock_vol_20_z", "Median Vol Z(20)"]
-    ];
+  if (MODE === "raw") {
+    headers.push(
+      "adv","dec","ad",
+      "pct_above_20dma","pct_above_20dma_chg",
+      "pct_above_50dma","pct_above_50dma_chg",
+      "pct_above_200dma","pct_above_200dma_chg",
+      "nh","nl","nhnl"
+    );
   } else {
-    cols = [
-      ["pct_above_20dma_chg", "Δ %>20DMA"],
-      ["pct_above_50dma_chg", "Δ %>50DMA"],
-      ["pct_above_200dma_chg", "Δ %>200DMA"]
-    ];
+    headers.push(
+      "ad_z_50",
+      "pct_above_20dma_z",
+      "pct_above_50dma_z",
+      "pct_above_200dma_z",
+      "nhnl_z"
+    );
   }
 
-  let html = "<tr><th>Date</th>";
-  cols.forEach(c => html += `<th>${c[1]}</th>`);
-  html += "</tr>";
-
-  data.forEach(r => {
-    html += `<tr><td class="date">${r.Date}</td>`;
-    cols.forEach(c => {
-      const v = r[c[0]];
-      html += `<td class="${heatClass(v)}">${v !== undefined ? (+v).toFixed(2) : ""}</td>`;
-    });
-    html += "</tr>";
+  // HEADER
+  let tr = document.createElement("tr");
+  headers.forEach(h => {
+    let th = document.createElement("th");
+    th.innerText = h;
+    tr.appendChild(th);
   });
+  table.appendChild(tr);
 
-  document.getElementById("breadthTable").innerHTML = html;
+  // ROWS
+  data.forEach(r => {
+    let tr = document.createElement("tr");
+
+    headers.forEach(h => {
+      let td = document.createElement("td");
+
+      if (h === "Date") {
+        td.innerText = r[h];
+        td.className = "date";
+      } else {
+        let val = parseFloat(r[h]);
+        td.innerText = isNaN(val) ? "" : val.toFixed(2);
+        td.className = colorClass(val);
+      }
+
+      tr.appendChild(td);
+    });
+
+    table.appendChild(tr);
+  });
 }
-
-document.getElementById("viewMode").onchange = render;
-document.getElementById("lookback").onchange = render;
 </script>
 
 </body>
