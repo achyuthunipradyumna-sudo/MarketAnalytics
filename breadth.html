@@ -11,7 +11,7 @@
 <div id="chart"></div>
 
 <script>
-fetch("data/breadth_full_history.csv")
+fetch("breadth_full_history.csv")
 .then(r => r.text())
 .then(text => {
   const rows = text.trim().split("\n");
