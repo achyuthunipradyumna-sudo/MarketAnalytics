@@ -1,61 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Trend</title>
-  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<meta charset="utf-8">
+<title>Trend Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 </head>
+
 <body>
+<h2>Trend & Momentum</h2>
 
-<h2>Trend</h2>
-
-<button onclick="setMode('z')">Z</button>
-<button onclick="setMode('raw')">Raw</button>
+<select id="idx">
+<option value="nifty50">NIFTY 50</option>
+<option value="nifty_total">NIFTY TOTAL MARKET</option>
+</select>
 
 <div id="chart"></div>
 
 <script>
-const DATA_URL = "data/history/breadth_full_history.csv";
-let rows=[], mode="z";
+const DATA="data/history/breadth_full_history.csv";
+const CFG={responsive:true,scrollZoom:false,doubleClick:false};
 
-const PLOT_CONFIG = {
-  responsive:true,
-  scrollZoom:false,
-  doubleClick:false,
-  displaylogo:false,
-  modeBarButtonsToRemove:["zoom2d","lasso2d","select2d"]
-};
-
-fetch(DATA_URL).then(r=>r.text()).then(t=>{
-  const l=t.trim().split("\n");
-  const h=l[0].split(",");
-  rows=l.slice(1).map(r=>{
-    const v=r.split(",");
-    let o={};
-    h.forEach((k,i)=>o[k]=+v[i]||v[i]);
-    return o;
-  });
-  render();
+fetch(DATA).then(r=>r.text()).then(t=>{
+ const rows=t.trim().split("\n");
+ const h=rows[0].split(",");
+ const d=rows.slice(1).map(r=>{let o={};r.split(",").forEach((v,i)=>o[h[i]]=v);return o});
+ render(d);
 });
 
-function setMode(m){mode=m;render();}
-
-function render(){
-  const x=rows.map(r=>r.Date);
-  const traces = mode==="z" ? [
-    {x,y:rows.map(r=>r.nifty50_dist_200_z),name:"Dist 200DMA Z"},
-    {x,y:rows.map(r=>r.nifty50_mom_126),name:"6M Momentum"}
-  ] : [
-    {x,y:rows.map(r=>r.nifty50_dma200_slope_pct),name:"DMA200 slope %"}
-  ];
-
-  Plotly.newPlot("chart", traces, {
-    hovermode:"x unified",
-    dragmode:"pan",
-    height:600
-  }, PLOT_CONFIG);
+function render(d){
+ const idx=document.getElementById("idx").value;
+ Plotly.newPlot("chart",[
+  {x:d.map(r=>r.Date),y:d.map(r=>+r[`${idx}_dist_200_z`]),name:"Dist 200DMA Z"},
+  {x:d.map(r=>r.Date),y:d.map(r=>+r[`${idx}_mom_126`]),name:"6M Momentum"}
+ ],{
+  dragmode:"pan",hovermode:"x unified",
+  yaxis:{title:"Z / Momentum"}
+ },CFG);
 }
+document.getElementById("idx").onchange=()=>location.reload();
 </script>
-
 </body>
 </html>
