@@ -10,6 +10,10 @@ body {
   padding: 16px;
 }
 
+h2 {
+  margin-bottom: 10px;
+}
+
 table {
   border-collapse: collapse;
   font-size: 12px;
@@ -25,15 +29,12 @@ th {
   background: #f5f5f5;
   position: sticky;
   top: 0;
+  z-index: 1;
 }
 
 td.date {
   text-align: left;
   font-weight: 600;
-}
-
-.dark {
-  color: #fff;
 }
 </style>
 </head>
@@ -61,6 +62,10 @@ td.date {
 </table>
 
 <script>
+/* =========================
+   CONFIG
+========================= */
+
 const CSV_URL =
   "https://achyuthunipradyumna-sudo.github.io/MarketAnalytics/data/history/breadth_full_history.csv";
 
@@ -77,30 +82,44 @@ const COLS = [
   "nhnl"
 ];
 
-// Excel colors
+/* =========================
+   COLORS
+========================= */
+
+// Excel-like gradient for % above DMA
 const RED = [215, 48, 39];
 const YELLOW = [255, 255, 191];
 const GREEN = [26, 152, 80];
+
+// Light sign-based colors for A/D & NH–NL
+const LIGHT_GREEN = "rgb(220, 245, 220)";
+const LIGHT_RED   = "rgb(245, 220, 220)";
+
+/* =========================
+   HELPERS
+========================= */
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
 function lerpColor(c1, c2, t) {
-  return `rgb(${Math.round(lerp(c1[0], c2[0], t))},
-              ${Math.round(lerp(c1[1], c2[1], t))},
-              ${Math.round(lerp(c1[2], c2[2], t))})`;
+  return `rgb(
+    ${Math.round(lerp(c1[0], c2[0], t))},
+    ${Math.round(lerp(c1[1], c2[1], t))},
+    ${Math.round(lerp(c1[2], c2[2], t))}
+  )`;
 }
 
+// 0 → 50 → 100 : red → yellow → green
 function pctColor(v) {
   if (v <= 50) return lerpColor(RED, YELLOW, v / 50);
   return lerpColor(YELLOW, GREEN, (v - 50) / 50);
 }
 
-function centeredColor(v, maxAbs) {
-  if (v < 0) return lerpColor(RED, YELLOW, (v + maxAbs) / maxAbs);
-  return lerpColor(YELLOW, GREEN, v / maxAbs);
-}
+/* =========================
+   MAIN
+========================= */
 
 fetch(CSV_URL)
   .then(r => {
@@ -120,6 +139,7 @@ fetch(CSV_URL)
 
     const tbody = document.querySelector("#tbl tbody");
 
+    // Latest date on top
     lines.slice(1).reverse().forEach(line => {
       const row = line.split(",");
       if (row.length !== header.length) return;
@@ -139,20 +159,21 @@ fetch(CSV_URL)
           } else {
             td.textContent = num.toFixed(2);
 
-            let bg = null;
+            /* ---- Coloring logic ---- */
+
+            // % Above DMA → gradient
             if (col.startsWith("pct_above")) {
-              bg = pctColor(num);
-            }
-            if (col === "ad" || col === "nhnl") {
-              bg = centeredColor(num, 2500);
+              td.style.background = pctColor(num);
             }
 
-            if (bg) {
-              td.style.background = bg;
-              if (num < -1000 || num > 80) td.classList.add("dark");
+            // A/D & NH–NL → sign only (FIXED)
+            if (col === "ad" || col === "nhnl") {
+              if (num > 0) td.style.background = LIGHT_GREEN;
+              else if (num < 0) td.style.background = LIGHT_RED;
             }
           }
         }
+
         tr.appendChild(td);
       });
 
