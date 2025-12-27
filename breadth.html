@@ -10,10 +10,6 @@ body {
   margin: 16px;
 }
 
-h2 {
-  margin-bottom: 8px;
-}
-
 .controls {
   margin-bottom: 12px;
 }
@@ -40,13 +36,12 @@ th {
   background: #f5f5f5;
   position: sticky;
   top: 0;
-  z-index: 2;
 }
 
 td.date {
   text-align: left;
-  white-space: nowrap;
   background: #fafafa;
+  font-weight: 600;
 }
 
 /* Z-score colors */
@@ -56,12 +51,12 @@ td.date {
 .z-neg { background: #ef8a62; }
 .z-neg-strong { background: #b2182b; color: white; }
 
-/* Raw % colors */
-.raw-strong { background: #1a9850; color: white; }
-.raw-pos { background: #91cf60; }
+/* Raw semantic colors */
+.raw-good { background: #1a9850; color: white; }
+.raw-ok { background: #91cf60; }
 .raw-neutral { background: #f7f7f7; }
-.raw-neg { background: #fc8d59; }
-.raw-strong-neg { background: #d73027; color: white; }
+.raw-bad { background: #fc8d59; }
+.raw-risk { background: #d73027; color: white; }
 </style>
 </head>
 
@@ -91,6 +86,7 @@ let DATA = [];
 let MODE = "z";
 let LOOKBACK = "all";
 
+/* RAW columns ONLY — no deltas */
 const RAW_COLS = [
   "adv","dec","ad",
   "pct_above_20dma","pct_above_50dma","pct_above_200dma",
@@ -122,6 +118,7 @@ fetch("data/history/breadth_full_history.csv")
 function setMode(m){ MODE=m; render(); }
 function setLookback(l){ LOOKBACK=l; render(); }
 
+/* Z-score coloring */
 function zClass(v){
   v = parseFloat(v);
   if (v >= 1.5) return "z-pos-strong";
@@ -131,24 +128,50 @@ function zClass(v){
   return "z-neg-strong";
 }
 
-function rawClass(v){
+/* Raw semantic coloring */
+function rawClass(col, v){
   v = parseFloat(v);
-  if (v >= 70) return "raw-strong";
-  if (v >= 55) return "raw-pos";
-  if (v >= 40) return "raw-neutral";
-  if (v >= 25) return "raw-neg";
-  return "raw-strong-neg";
+
+  // % participation
+  if (col.includes("pct_above")) {
+    if (v >= 60) return "raw-good";
+    if (v >= 45) return "raw-ok";
+    if (v >= 30) return "raw-neutral";
+    return "raw-bad";
+  }
+
+  // A/D or NH–NL
+  if (["ad","nhnl"].includes(col)) {
+    if (v > 500) return "raw-good";
+    if (v > 0) return "raw-ok";
+    if (v > -500) return "raw-neutral";
+    return "raw-bad";
+  }
+
+  // Volatility (LOW is good)
+  if (col.includes("vol")) {
+    if (v <= 0.25) return "raw-good";
+    if (v <= 0.35) return "raw-ok";
+    if (v <= 0.45) return "raw-neutral";
+    return "raw-risk";
+  }
+
+  return "raw-neutral";
 }
 
 function render(){
-  let rows = DATA;
+  let rows = [...DATA];
+
   if (LOOKBACK !== "all"){
     rows = rows.slice(-parseInt(LOOKBACK));
   }
 
-  const cols = MODE==="z" ? Z_COLS : RAW_COLS;
-  let html = "<table><tr><th>Date</th>";
+  // 🔑 Latest date on TOP
+  rows.reverse();
 
+  const cols = MODE==="z" ? Z_COLS : RAW_COLS;
+
+  let html = "<table><tr><th>Date</th>";
   cols.forEach(c=>html+=`<th>${c}</th>`);
   html+="</tr>";
 
@@ -156,7 +179,7 @@ function render(){
     html+=`<tr><td class="date">${r.Date}</td>`;
     cols.forEach(c=>{
       const val = r[c] || "";
-      const cls = MODE==="z" ? zClass(val) : rawClass(val);
+      const cls = MODE==="z" ? zClass(val) : rawClass(c,val);
       html+=`<td class="${cls}">${val}</td>`;
     });
     html+="</tr>";
