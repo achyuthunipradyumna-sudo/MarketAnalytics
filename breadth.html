@@ -6,94 +6,76 @@
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <style>
     body { font-family: Arial; margin: 20px; }
-    select { margin-right: 10px; padding: 6px; }
+    select { padding: 6px; margin-right: 10px; }
     #chart { width: 100%; height: 900px; }
   </style>
 </head>
 <body>
 
-<h2>Market Breadth</h2>
+<h2>Breadth — Market Participation</h2>
 
-<select id="range">
-  <option value="30">1M</option>
-  <option value="90">3M</option>
-  <option value="180">6M</option>
-  <option value="365">1Y</option>
-  <option value="1095">3Y</option>
-  <option value="1825">5Y</option>
-  <option value="all">Full</option>
-</select>
-
+<label>Mode:</label>
 <select id="mode">
   <option value="z">Z-Scores</option>
-  <option value="raw">Raw</option>
+  <option value="raw">Raw / %</option>
 </select>
 
 <div id="chart"></div>
 
 <script>
 const FILE = "data/history/breadth_full_history.csv";
+
+const PLOT_CONFIG = {
+  responsive: true,
+  scrollZoom: false,
+  doubleClick: false,
+  displaylogo: false,
+  modeBarButtonsToRemove: [
+    "zoom2d","select2d","lasso2d",
+    "zoomIn2d","zoomOut2d","autoScale2d"
+  ]
+};
+
 let rows;
 
-fetch(FILE).then(r => r.text()).then(text => {
+fetch(FILE).then(r=>r.text()).then(text=>{
   const lines = text.trim().split("\n");
   const h = lines[0].split(",");
-  rows = lines.slice(1).map(l => {
-    const v = l.split(",");
-    let o = {};
-    h.forEach((k,i)=>o[k]=v[i]);
+  rows = lines.slice(1).map(l=>{
+    const v=l.split(",");
+    let o={};
+    h.forEach((k,i)=>o[k]=+v[i]||v[i]);
     return o;
   });
-  render();
+  draw();
 });
 
-function slice(days){
-  if(days==="all") return rows;
-  return rows.slice(-days);
-}
+document.getElementById("mode").onchange = draw;
 
-function render(){
-  const days = document.getElementById("range").value;
+function draw(){
   const mode = document.getElementById("mode").value;
-  const d = slice(days);
-  const x = d.map(r => r.Date);
+  const x = rows.map(r=>new Date(r.Date));
 
-  const traces = [
-    {
-      x, y: d.map(r => +r.ad_z_50),
-      name: "Advance–Decline Z",
-      visible: mode==="z"
-    },
-    {
-      x, y: d.map(r => +r.pct_above_50dma_z),
-      name: "% > 50 DMA Z",
-      visible: mode==="z"
-    },
-    {
-      x, y: d.map(r => +r.nhnl_z),
-      name: "NH–NL Z",
-      visible: mode==="z"
-    }
+  const traces = mode==="z" ? [
+    {x,y:rows.map(r=>r.ad_z_50),name:"AD Z(50)",line:{width:2}},
+    {x,y:rows.map(r=>r.pct_above_50dma_z),name:"%>50DMA Z"},
+    {x,y:rows.map(r=>r.pct_above_200dma_z),name:"%>200DMA Z"},
+    {x,y:rows.map(r=>r.nhnl_z),name:"NH-NL Z"}
+  ] : [
+    {x,y:rows.map(r=>r.pct_above_50dma_chg),name:"%>50DMA Δ20d"},
+    {x,y:rows.map(r=>r.pct_above_200dma_chg),name:"%>200DMA Δ20d"}
   ];
 
   const layout = {
-    title: "Breadth (Participation)",
-    dragmode: "pan",
-    hovermode: "x unified",
-    yaxis: { zeroline: true },
-    margin: { t: 40 }
+    dragmode:"pan",
+    hovermode:"x unified",
+    title:"Breadth",
+    yaxis:{zeroline:true},
+    margin:{t:40}
   };
 
-  Plotly.newPlot("chart", traces, layout, {
-    responsive:true,
-    scrollZoom:false,
-    displaylogo:false
-  });
+  Plotly.newPlot("chart", traces, layout, PLOT_CONFIG);
 }
-
-document.getElementById("range").onchange = render;
-document.getElementById("mode").onchange = render;
 </script>
-
 </body>
 </html>
