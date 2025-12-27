@@ -2,183 +2,29 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Market Regime Dashboard</title>
-  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-
+  <title>Market Analytics Dashboard</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-
-    h2 {
-      margin-bottom: 10px;
-    }
-
-    .controls {
-      margin-bottom: 20px;
-    }
-
-    .panel {
-      margin-top: 30px;
-      border-top: 2px solid #ddd;
-      padding-top: 15px;
-    }
-
-    .panel h3 {
-      margin-bottom: 8px;
-    }
-
-    .chart {
-      width: 100%;
-      height: 350px;
-    }
-
-    select {
-      padding: 6px;
-      margin-right: 12px;
+    body { font-family: Arial; margin: 40px; }
+    a {
+      display: block;
+      font-size: 18px;
+      margin: 12px 0;
+      text-decoration: none;
+      color: #1a4fb3;
     }
   </style>
 </head>
-
 <body>
 
-<h2>Market Regime Dashboard</h2>
+<h2>Market Analytics</h2>
 
-<div class="controls">
-  <label>Index:</label>
-  <select id="indexSelector">
-    <option value="nifty50">NIFTY 50</option>
-    <option value="nifty_total">NIFTY TOTAL MARKET</option>
-  </select>
+<a href="breadth.html">📊 Breadth Dashboard</a>
+<a href="trend.html">📈 Trend Dashboard</a>
+<a href="volatility.html">⚠️ Volatility Dashboard</a>
 
-  <label>View:</label>
-  <select id="modeSelector">
-    <option value="z">Z-Scores</option>
-    <option value="raw">Raw Values</option>
-  </select>
-
-  <label>Range:</label>
-  <select id="rangeSelector">
-    <option value="30">1M</option>
-    <option value="90">3M</option>
-    <option value="180">6M</option>
-    <option value="365">1Y</option>
-    <option value="1095">3Y</option>
-    <option value="1825">5Y</option>
-    <option value="all">All</option>
-  </select>
-</div>
-
-<!-- ================= BREADTH ================= -->
-<div class="panel">
-  <h3>📊 Breadth</h3>
-  <div id="breadthChart" class="chart"></div>
-</div>
-
-<!-- ================= TREND ================= -->
-<div class="panel">
-  <h3>📈 Trend</h3>
-  <div id="trendChart" class="chart"></div>
-</div>
-
-<!-- ================= VOLATILITY ================= -->
-<div class="panel">
-  <h3>🌊 Volatility</h3>
-  <div id="volChart" class="chart"></div>
-</div>
-
-<script>
-let rawData;
-
-fetch("breadth_full_history.csv")
-  .then(r => r.text())
-  .then(text => {
-    const rows = text.trim().split("\n");
-    const header = rows[0].split(",");
-    rawData = rows.slice(1).map(r => {
-      const v = r.split(",");
-      let o = {};
-      header.forEach((h, i) => o[h] = v[i]);
-      return o;
-    });
-    render();
-  });
-
-function sliceData(days) {
-  if (days === "all") return rawData;
-  return rawData.slice(-days);
-}
-
-function render() {
-  const idx = indexSelector.value;
-  const mode = modeSelector.value;
-  const range = rangeSelector.value;
-
-  const data = sliceData(range);
-  const x = data.map(d => new Date(d.Date));
-
-  /* ================= BREADTH ================= */
-  Plotly.newPlot("breadthChart", [
-    {
-      x, y: data.map(d => +d.ad_z_50),
-      name: "AD Z(50)",
-      visible: mode === "z"
-    },
-    {
-      x, y: data.map(d => +d.pct_above_50dma_z),
-      name: "% > 50DMA Z",
-      visible: mode === "z"
-    },
-    {
-      x, y: data.map(d => +d.nhnl_z),
-      name: "NH–NL Z",
-      visible: mode === "z"
-    }
-  ], {
-    title: "Breadth Participation",
-    hovermode: "x unified"
-  });
-
-  /* ================= TREND ================= */
-  Plotly.newPlot("trendChart", [
-    {
-      x, y: data.map(d => +d[`${idx}_dist_200_z`]),
-      name: "Distance from 200DMA (Z)",
-      visible: mode === "z"
-    },
-    {
-      x, y: data.map(d => +d[`${idx}_mom_126`]),
-      name: "6M Momentum",
-      visible: mode === "raw"
-    }
-  ], {
-    title: "Trend Structure",
-    hovermode: "x unified"
-  });
-
-  /* ================= VOLATILITY ================= */
-  Plotly.newPlot("volChart", [
-    {
-      x, y: data.map(d => +d[`${idx}_vol_20_z`]),
-      name: "Index Vol Z(20)",
-      visible: mode === "z"
-    },
-    {
-      x, y: data.map(d => +d.median_stock_vol_20_z),
-      name: "Stock Vol Breadth Z",
-      visible: mode === "z"
-    }
-  ], {
-    title: "Risk & Volatility",
-    hovermode: "x unified"
-  });
-}
-
-indexSelector.onchange = render;
-modeSelector.onchange = render;
-rangeSelector.onchange = render;
-</script>
+<p style="margin-top:30px;color:#666">
+Data updated daily from NSE EOD
+</p>
 
 </body>
 </html>
