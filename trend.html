@@ -4,59 +4,77 @@
   <meta charset="utf-8">
   <title>Trend Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    select { padding: 6px; margin-right: 10px; }
+    #chart { width: 100%; height: 900px; }
+  </style>
 </head>
 <body>
 
 <h2>Trend & Momentum</h2>
 
+<label>Index:</label>
 <select id="index">
   <option value="nifty50">NIFTY 50</option>
-  <option value="nifty_total">TOTAL MARKET</option>
+  <option value="nifty_total">Total Market</option>
 </select>
 
-<select id="range">
-  <option value="365">1Y</option>
-  <option value="1095">3Y</option>
-  <option value="all">Full</option>
-</select>
-
-<div id="chart" style="height:900px;"></div>
+<div id="chart"></div>
 
 <script>
+const FILE = "data/history/breadth_full_history.csv";
+
+const PLOT_CONFIG = {
+  responsive:true, scrollZoom:false, doubleClick:false,
+  displaylogo:false,
+  modeBarButtonsToRemove:[
+    "zoom2d","select2d","lasso2d",
+    "zoomIn2d","zoomOut2d","autoScale2d"
+  ]
+};
+
 let rows;
-fetch("data/history/breadth_full_history.csv")
-.then(r=>r.text()).then(t=>{
+
+fetch(FILE).then(r=>r.text()).then(t=>{
   const l=t.trim().split("\n");
   const h=l[0].split(",");
   rows=l.slice(1).map(r=>{
     const v=r.split(",");
-    let o={}; h.forEach((k,i)=>o[k]=v[i]); return o;
+    let o={}; h.forEach((k,i)=>o[k]=+v[i]||v[i]); return o;
   });
-  render();
+  draw();
 });
 
-function render(){
+document.getElementById("index").onchange=draw;
+
+function draw(){
   const idx=document.getElementById("index").value;
-  const r=document.getElementById("range").value;
-  const d=r==="all"?rows:rows.slice(-r);
-  const x=d.map(r=>r.Date);
+  const x=rows.map(r=>new Date(r.Date));
 
   const traces=[
-    { x, y:d.map(r=>+r[`${idx}_dist_200_z`]), name:"Dist 200DMA (Z)" },
-    { x, y:d.map(r=>+r[`${idx}_dma200_slope_pct`]), name:"200DMA Slope %" },
-    { x, y:d.map(r=>+r[`${idx}_persistence_200`]), name:"Trend Persistence" },
-    { x, y:d.map(r=>+r[`${idx}_mom_126`]), name:"6M Momentum" }
+    {
+      x,y:rows.map(r=>r[`${idx}_dist_200_z`]),
+      name:"Distance from 200DMA (Z)",
+      yaxis:"y1", line:{width:2}
+    },
+    {
+      x,y:rows.map(r=>r[`${idx}_mom_126`]),
+      name:"6M Momentum",
+      yaxis:"y2", line:{dash:"dot"}
+    }
   ];
 
-  Plotly.newPlot("chart", traces, {
-    title:"Trend Strength",
+  const layout={
     dragmode:"pan",
-    hovermode:"x unified"
-  }, {scrollZoom:false});
-}
+    hovermode:"x unified",
+    yaxis:{title:"Trend (Z)"},
+    yaxis2:{title:"Momentum",overlaying:"y",side:"right"},
+    margin:{t:40}
+  };
 
-document.getElementById("index").onchange=render;
-document.getElementById("range").onchange=render;
+  Plotly.newPlot("chart",traces,layout,PLOT_CONFIG);
+}
 </script>
 </body>
 </html>
