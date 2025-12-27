@@ -2,68 +2,79 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Market Breadth – Daily Heatmap</title>
+<title>Market Breadth — Daily State</title>
 
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  margin: 20px;
-}
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    margin: 20px;
+    background: #fff;
+  }
 
-h2 { margin-bottom: 8px; }
+  h2 { margin-bottom: 8px; }
 
-.controls {
-  margin-bottom: 12px;
-}
+  .controls {
+    margin-bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
 
-select {
-  padding: 6px;
-  font-size: 14px;
-  margin-right: 10px;
-}
+  select, button {
+    padding: 6px 10px;
+    font-size: 14px;
+  }
 
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 13px;
-}
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px;
+  }
 
-th, td {
-  border: 1px solid #ddd;
-  padding: 6px;
-  text-align: right;
-}
+  th, td {
+    border: 1px solid #ddd;
+    padding: 6px;
+    text-align: right;
+    white-space: nowrap;
+  }
 
-th {
-  background: #f4f4f4;
-  position: sticky;
-  top: 0;
-}
+  th {
+    background: #f4f4f4;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
 
-td:first-child, th:first-child {
-  text-align: left;
-  font-weight: 600;
-}
+  td.date {
+    text-align: left;
+    font-weight: 600;
+  }
 
-.heat-pos { background-color: #d6f5d6; }
-.heat-neg { background-color: #f8d7da; }
-.heat-mid { background-color: #ffffff; }
+  /* Heatmap colors */
+  .pos-strong { background: #b6e3b6; }
+  .pos { background: #e6f4ea; }
+  .neg { background: #fde2e2; }
+  .neg-strong { background: #f5b7b7; }
+
+  .zero { background: #fff; }
+
 </style>
 </head>
-
 <body>
 
-<h2>📊 Market Breadth — Daily Heatmap</h2>
+<h2>Market Breadth — Participation & Internal Strength</h2>
 
 <div class="controls">
-  View:
-  <select id="viewSelect">
+  <label>View:</label>
+  <select id="viewMode">
     <option value="z">Z-Scores</option>
-    <option value="raw">Raw Values</option>
+    <option value="chg">Δ (20-Day Change)</option>
   </select>
 
-  Lookback:
-  <select id="lookbackSelect">
+  <label>Lookback:</label>
+  <select id="lookback">
     <option value="30">1 Month</option>
     <option value="90">3 Months</option>
     <option value="180">6 Months</option>
@@ -72,84 +83,83 @@ td:first-child, th:first-child {
   </select>
 </div>
 
-<table id="breadthTable"></table>
+<div style="overflow-x:auto">
+  <table id="breadthTable"></table>
+</div>
 
 <script>
 const DATA_URL = "data/history/breadth_full_history.csv";
 
 let rows = [];
+let headers = [];
 
 fetch(DATA_URL)
   .then(r => r.text())
   .then(text => {
     const lines = text.trim().split("\n");
-    const header = lines[0].split(",");
-    rows = lines.slice(1).map(l => {
-      const v = l.split(",");
+    headers = lines[0].split(",");
+    rows = lines.slice(1).map(r => {
+      const v = r.split(",");
       let o = {};
-      header.forEach((h,i)=>o[h]=v[i]);
+      headers.forEach((h, i) => o[h] = v[i]);
       return o;
     });
     render();
   });
 
 function heatClass(v) {
-  if (v === "" || isNaN(v)) return "heat-mid";
-  v = parseFloat(v);
-  if (v > 0.5) return "heat-pos";
-  if (v < -0.5) return "heat-neg";
-  return "heat-mid";
+  const x = parseFloat(v);
+  if (isNaN(x)) return "zero";
+  if (x >= 1.5) return "pos-strong";
+  if (x > 0) return "pos";
+  if (x <= -1.5) return "neg-strong";
+  if (x < 0) return "neg";
+  return "zero";
 }
 
 function render() {
-  const view = viewSelect.value;
-  const lb = lookbackSelect.value;
+  const view = document.getElementById("viewMode").value;
+  const lb = document.getElementById("lookback").value;
 
-  let data = [...rows];
+  let data = rows.slice();
   if (lb !== "all") data = data.slice(-parseInt(lb));
 
   let cols;
   if (view === "z") {
     cols = [
-      ["ad_z_50","AD Z(50)"],
-      ["pct_above_20dma_z","%>20DMA Z"],
-      ["pct_above_50dma_z","%>50DMA Z"],
-      ["pct_above_200dma_z","%>200DMA Z"],
-      ["nhnl_z","NH−NL Z"]
+      ["ad_z_50", "AD Z(50)"],
+      ["pct_above_20dma_z", "%>20DMA Z"],
+      ["pct_above_50dma_z", "%>50DMA Z"],
+      ["pct_above_200dma_z", "%>200DMA Z"],
+      ["nhnl_z", "NH–NL Z"],
+      ["median_stock_vol_20_z", "Median Vol Z(20)"]
     ];
   } else {
     cols = [
-      ["ad","AD"],
-      ["pct_above_20dma","%>20DMA"],
-      ["pct_above_20dma_chg","Δ20DMA"],
-      ["pct_above_50dma","%>50DMA"],
-      ["pct_above_50dma_chg","Δ50DMA"],
-      ["pct_above_200dma","%>200DMA"],
-      ["pct_above_200dma_chg","Δ200DMA"],
-      ["nh","NH"],
-      ["nl","NL"],
-      ["nhnl","NH−NL"]
+      ["pct_above_20dma_chg", "Δ %>20DMA"],
+      ["pct_above_50dma_chg", "Δ %>50DMA"],
+      ["pct_above_200dma_chg", "Δ %>200DMA"]
     ];
   }
 
   let html = "<tr><th>Date</th>";
-  cols.forEach(c=>html+=`<th>${c[1]}</th>`);
+  cols.forEach(c => html += `<th>${c[1]}</th>`);
   html += "</tr>";
 
-  data.forEach(r=>{
-    html += `<tr><td>${r.Date}</td>`;
-    cols.forEach(c=>{
-      const v = r[c[0]] ?? "";
-      html += `<td class="${heatClass(v)}">${v === "" ? "" : (+v).toFixed(2)}</td>`;
+  data.forEach(r => {
+    html += `<tr><td class="date">${r.Date}</td>`;
+    cols.forEach(c => {
+      const v = r[c[0]];
+      html += `<td class="${heatClass(v)}">${v !== undefined ? (+v).toFixed(2) : ""}</td>`;
     });
     html += "</tr>";
   });
 
-  breadthTable.innerHTML = html;
+  document.getElementById("breadthTable").innerHTML = html;
 }
 
-viewSelect.onchange = render;
-lookbackSelect.onchange = render;
+document.getElementById("viewMode").onchange = render;
+document.getElementById("lookback").onchange = render;
 </script>
 
 </body>
