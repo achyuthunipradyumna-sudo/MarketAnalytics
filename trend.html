@@ -4,80 +4,59 @@
   <meta charset="utf-8">
   <title>Trend Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    select { margin-right: 12px; padding: 4px; }
-    #chart { width: 100%; height: 750px; }
-  </style>
 </head>
 <body>
 
 <h2>Trend & Momentum</h2>
 
-<label>Index:</label>
 <select id="index">
   <option value="nifty50">NIFTY 50</option>
-  <option value="nifty_total">Total Market</option>
+  <option value="nifty_total">TOTAL MARKET</option>
 </select>
 
-<div id="chart"></div>
+<select id="range">
+  <option value="365">1Y</option>
+  <option value="1095">3Y</option>
+  <option value="all">Full</option>
+</select>
+
+<div id="chart" style="height:900px;"></div>
 
 <script>
-const DATA_URL = "data/history/breadth_full_history.csv";
-let raw;
-
-fetch(DATA_URL)
-  .then(r => r.text())
-  .then(text => {
-    const rows = text.trim().split("\n");
-    const header = rows[0].split(",");
-    raw = rows.slice(1).map(r => {
-      const o = {};
-      r.split(",").forEach((v, i) => o[header[i]] = v);
-      return o;
-    });
-    render();
+let rows;
+fetch("data/history/breadth_full_history.csv")
+.then(r=>r.text()).then(t=>{
+  const l=t.trim().split("\n");
+  const h=l[0].split(",");
+  rows=l.slice(1).map(r=>{
+    const v=r.split(",");
+    let o={}; h.forEach((k,i)=>o[k]=v[i]); return o;
   });
+  render();
+});
 
-function render() {
-  const idx = document.getElementById("index").value;
-  const x = raw.map(d => new Date(d.Date));
+function render(){
+  const idx=document.getElementById("index").value;
+  const r=document.getElementById("range").value;
+  const d=r==="all"?rows:rows.slice(-r);
+  const x=d.map(r=>r.Date);
 
-  const traces = [
-    {
-      x, y: raw.map(d => +d[`${idx}_dist_200_z`]),
-      name: "Distance from 200 DMA (Z)",
-      line: {width: 2}
-    },
-    {
-      x, y: raw.map(d => +d[`${idx}_dma200_slope_pct`]),
-      name: "200 DMA Slope (%)",
-      yaxis: "y2"
-    },
-    {
-      x, y: raw.map(d => +d[`${idx}_mom_126`]),
-      name: "6M Momentum",
-      yaxis: "y2"
-    }
+  const traces=[
+    { x, y:d.map(r=>+r[`${idx}_dist_200_z`]), name:"Dist 200DMA (Z)" },
+    { x, y:d.map(r=>+r[`${idx}_dma200_slope_pct`]), name:"200DMA Slope %" },
+    { x, y:d.map(r=>+r[`${idx}_persistence_200`]), name:"Trend Persistence" },
+    { x, y:d.map(r=>+r[`${idx}_mom_126`]), name:"6M Momentum" }
   ];
 
   Plotly.newPlot("chart", traces, {
-    title: idx.toUpperCase() + " Trend & Momentum",
-    hovermode: "x unified",
-    legend: {orientation: "h"},
-    yaxis: {title: "Trend (Z)"},
-    yaxis2: {
-      title: "Momentum / Slope",
-      overlaying: "y",
-      side: "right"
-    }
-  }, {
-    scrollZoom: false
-  });
+    title:"Trend Strength",
+    dragmode:"pan",
+    hovermode:"x unified"
+  }, {scrollZoom:false});
 }
 
-document.getElementById("index").onchange = render;
+document.getElementById("index").onchange=render;
+document.getElementById("range").onchange=render;
 </script>
-
 </body>
 </html>
