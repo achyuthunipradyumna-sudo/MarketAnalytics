@@ -4,54 +4,72 @@
   <meta charset="utf-8">
   <title>Breadth Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    select { margin-right: 12px; padding: 4px; }
+    #chart { width: 100%; height: 750px; }
+  </style>
 </head>
 <body>
 
-<h3>Breadth — Participation & Internal Strength</h3>
+<h2>Breadth Dashboard</h2>
+
+<label>Metric:</label>
+<select id="mode">
+  <option value="z">Z-Scores</option>
+</select>
+
 <div id="chart"></div>
 
 <script>
-fetch("breadth_full_history.csv")
-.then(r => r.text())
-.then(text => {
-  const rows = text.trim().split("\n");
-  const h = rows[0].split(",");
-  const d = rows.slice(1).map(r => {
-    let o = {};
-    r.split(",").forEach((v,i)=>o[h[i]]=v);
-    return o;
-  });
+const DATA_URL = "data/history/breadth_full_history.csv";
 
-  const x = d.map(r => r.Date);
+fetch(DATA_URL)
+  .then(r => r.text())
+  .then(text => {
+    const rows = text.trim().split("\n");
+    const header = rows[0].split(",");
+    const data = rows.slice(1).map(r => {
+      const o = {};
+      r.split(",").forEach((v, i) => o[header[i]] = v);
+      return o;
+    });
 
-  const traces = [
-    { x, y: d.map(r=>+r.ad_z_50), name:"AD Z(50)" },
-    { x, y: d.map(r=>+r.pct_above_20dma_z), name:"%>20DMA Z" },
-    { x, y: d.map(r=>+r.pct_above_50dma_z), name:"%>50DMA Z" },
-    { x, y: d.map(r=>+r.pct_above_200dma_z), name:"%>200DMA Z" },
-    { x, y: d.map(r=>+r.nhnl_z), name:"NH-NL Z" }
-  ];
+    const x = data.map(d => new Date(d.Date));
 
-  Plotly.newPlot("chart", traces, {
-    height: 600,
-    hovermode: "x unified",
-    shapes:[{type:"line",x0:0,x1:1,y0:0,y1:0,xref:"paper"}],
-    xaxis: {
-      rangeselector: {
-        buttons:[
-          {count:1,label:"1M",step:"month",stepmode:"backward"},
-          {count:3,label:"3M",step:"month",stepmode:"backward"},
-          {count:1,label:"1Y",step:"year",stepmode:"backward"},
-          {count:5,label:"5Y",step:"year",stepmode:"backward"},
-          {step:"all"}
-        ]
+    const traces = [
+      {
+        x, y: data.map(d => +d.ad_z_50),
+        name: "Advance–Decline Z(50)",
+        line: {width: 2}
+      },
+      {
+        x, y: data.map(d => +d.pct_above_20dma_z),
+        name: "% Stocks > 20 DMA (Z)"
+      },
+      {
+        x, y: data.map(d => +d.pct_above_50dma_z),
+        name: "% Stocks > 50 DMA (Z)"
+      },
+      {
+        x, y: data.map(d => +d.pct_above_200dma_z),
+        name: "% Stocks > 200 DMA (Z)"
+      },
+      {
+        x, y: data.map(d => +d.nhnl_z),
+        name: "New High – New Low Z"
       }
-    }
-  },{
-    scrollZoom:false,
-    doubleClick:false
+    ];
+
+    Plotly.newPlot("chart", traces, {
+      title: "Market Breadth (Full History)",
+      hovermode: "x unified",
+      legend: {orientation: "h"},
+      yaxis: {zeroline: true},
+    }, {
+      scrollZoom: false
+    });
   });
-});
 </script>
 
 </body>
