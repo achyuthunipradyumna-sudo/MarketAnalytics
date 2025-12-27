@@ -1,51 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Volatility</title>
-  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<meta charset="utf-8">
+<title>Volatility Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 </head>
-<body>
 
+<body>
 <h2>Volatility & Risk</h2>
+
+<select id="idx">
+<option value="nifty50">NIFTY 50</option>
+<option value="nifty_total">NIFTY TOTAL MARKET</option>
+</select>
 
 <div id="chart"></div>
 
 <script>
-const DATA_URL="data/history/breadth_full_history.csv";
-let rows=[];
+fetch("data/history/breadth_full_history.csv")
+.then(r=>r.text()).then(t=>{
+ const rows=t.trim().split("\n");
+ const h=rows[0].split(",");
+ const d=rows.slice(1).map(r=>{let o={};r.split(",").forEach((v,i)=>o[h[i]]=v);return o});
+ const idx=document.getElementById("idx").value;
 
-const PLOT_CONFIG={
-  responsive:true,
-  scrollZoom:false,
-  doubleClick:false,
-  displaylogo:false,
-  modeBarButtonsToRemove:["zoom2d","lasso2d","select2d"]
-};
-
-fetch(DATA_URL).then(r=>r.text()).then(t=>{
-  const l=t.trim().split("\n");
-  const h=l[0].split(",");
-  rows=l.slice(1).map(r=>{
-    const v=r.split(",");
-    let o={};
-    h.forEach((k,i)=>o[k]=+v[i]||v[i]);
-    return o;
-  });
-  render();
+ Plotly.newPlot("chart",[
+  {x:d.map(r=>r.Date),y:d.map(r=>+r[`${idx}_vol_20_z`]),name:"Index Vol Z"},
+  {x:d.map(r=>r.Date),y:d.map(r=>+r.median_stock_vol_20_z),name:"Stock Vol Breadth Z"}
+ ],{
+  dragmode:"pan",hovermode:"x unified",
+  yaxis:{title:"Volatility Z"}
+ },{scrollZoom:false,responsive:true});
 });
-
-function render(){
-  Plotly.newPlot("chart",[
-    {x:rows.map(r=>r.Date),y:rows.map(r=>r.nifty50_vol_20_z),name:"Index Vol Z"},
-    {x:rows.map(r=>r.Date),y:rows.map(r=>r.median_stock_vol_20_z),name:"Stock Vol Z"}
-  ],{
-    hovermode:"x unified",
-    dragmode:"pan",
-    height:600
-  },PLOT_CONFIG);
-}
 </script>
-
 </body>
 </html>
