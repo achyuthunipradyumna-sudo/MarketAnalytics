@@ -1,92 +1,84 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Breadth — Participation & Internal Strength</title>
-  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    .controls button {
-      margin-right: 8px;
-      padding: 6px 10px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
+<meta charset="utf-8">
+<title>Breadth Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
+<style>
+body { font-family: Arial; margin: 20px; }
+.controls { margin-bottom: 12px; }
+button { margin-right: 6px; padding: 6px 10px; }
+</style>
+</head>
+
+<body>
 <h2>Breadth — Participation & Internal Strength</h2>
 
 <div class="controls">
-  <b>View:</b>
-  <button onclick="setMode('z')">Z-Scores</button>
-  <button onclick="setMode('raw')">Raw</button>
+  Index:
+  <select id="indexSel">
+    <option value="nifty50">NIFTY 50</option>
+    <option value="nifty_total">NIFTY TOTAL MARKET</option>
+  </select>
+
+  Range:
+  <button onclick="setRange(30)">1M</button>
+  <button onclick="setRange(90)">3M</button>
+  <button onclick="setRange(180)">6M</button>
+  <button onclick="setRange(365)">1Y</button>
+  <button onclick="setRange(1825)">5Y</button>
+  <button onclick="setRange('all')">All</button>
 </div>
 
 <div id="chart"></div>
 
 <script>
 const DATA_URL = "data/history/breadth_full_history.csv";
-let rows = [];
-let mode = "z";
+let RAW = [];
+let RANGE = 365;
 
 const PLOT_CONFIG = {
-  responsive: true,
-  scrollZoom: false,
-  doubleClick: false,
-  displaylogo: false,
-  modeBarButtonsToRemove: [
+  responsive:true, scrollZoom:false, doubleClick:false,
+  displaylogo:false,
+  modeBarButtonsToRemove:[
     "zoom2d","select2d","lasso2d",
     "zoomIn2d","zoomOut2d","autoScale2d"
   ]
 };
 
 fetch(DATA_URL)
-  .then(r => r.text())
-  .then(txt => {
-    const lines = txt.trim().split("\n");
-    const headers = lines[0].split(",");
-    rows = lines.slice(1).map(l => {
-      const v = l.split(",");
-      let o = {};
-      headers.forEach((h,i)=>o[h]=+v[i] || v[i]);
-      return o;
-    });
-    render();
+.then(r=>r.text())
+.then(t=>{
+  const rows=t.trim().split("\n");
+  const h=rows[0].split(",");
+  RAW=rows.slice(1).map(r=>{
+    const o={}; r.split(",").forEach((v,i)=>o[h[i]]=v); return o;
   });
-
-function setMode(m) {
-  mode = m;
   render();
-}
+});
 
-function render() {
-  const x = rows.map(r => r.Date);
+function setRange(r){ RANGE=r; render(); }
 
-  const traces = mode === "z" ? [
-    { x, y: rows.map(r=>r.ad_z_50), name:"AD Z(50)" },
-    { x, y: rows.map(r=>r.pct_above_20dma_z), name:"%>20DMA Z" },
-    { x, y: rows.map(r=>r.pct_above_50dma_z), name:"%>50DMA Z" },
-    { x, y: rows.map(r=>r.pct_above_200dma_z), name:"%>200DMA Z" },
-    { x, y: rows.map(r=>r.nhnl_z), name:"NH–NL Z" }
-  ] : [
-    { x, y: rows.map(r=>r.ad_z_50), name:"AD (proxy)" },
-    { x, y: rows.map(r=>r.pct_above_20dma_chg), name:"%>20DMA Δ" },
-    { x, y: rows.map(r=>r.pct_above_50dma_chg), name:"%>50DMA Δ" },
-    { x, y: rows.map(r=>r.pct_above_200dma_chg), name:"%>200DMA Δ" }
+function render(){
+  const d = RANGE==="all"? RAW : RAW.slice(-RANGE);
+  const x = d.map(r=>r.Date);
+
+  const traces = [
+    {x,y:d.map(r=>+r.ad_z_50), name:"AD Z(50)"},
+    {x,y:d.map(r=>+r.pct_above_20dma_z), name:"%>20DMA Z"},
+    {x,y:d.map(r=>+r.pct_above_50dma_z), name:"%>50DMA Z"},
+    {x,y:d.map(r=>+r.pct_above_200dma_z), name:"%>200DMA Z"},
+    {x,y:d.map(r=>+r.nhnl_z), name:"NH-NL Z"}
   ];
 
-  const layout = {
-    title: "Breadth",
-    hovermode: "x unified",
-    dragmode: "pan",
-    yaxis: { zeroline: true },
-    height: 600
-  };
-
-  Plotly.newPlot("chart", traces, layout, PLOT_CONFIG);
+  Plotly.newPlot("chart", traces, {
+    dragmode:"pan",
+    hovermode:"x unified",
+    yaxis:{zeroline:true,title:"Z-Score"},
+    legend:{orientation:"h"}
+  }, PLOT_CONFIG);
 }
 </script>
-
 </body>
 </html>
