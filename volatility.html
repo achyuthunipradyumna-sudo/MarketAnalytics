@@ -4,70 +4,43 @@
   <meta charset="utf-8">
   <title>Volatility Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    select { margin-right: 12px; padding: 4px; }
-    #chart { width: 100%; height: 750px; }
-  </style>
 </head>
 <body>
 
-<h2>Volatility & Risk</h2>
+<h2>Volatility Regime</h2>
 
-<label>Index:</label>
 <select id="index">
   <option value="nifty50">NIFTY 50</option>
-  <option value="nifty_total">Total Market</option>
+  <option value="nifty_total">TOTAL MARKET</option>
 </select>
 
-<div id="chart"></div>
+<div id="chart" style="height:700px;"></div>
 
 <script>
-const DATA_URL = "data/history/breadth_full_history.csv";
-let raw;
-
-fetch(DATA_URL)
-  .then(r => r.text())
-  .then(text => {
-    const rows = text.trim().split("\n");
-    const header = rows[0].split(",");
-    raw = rows.slice(1).map(r => {
-      const o = {};
-      r.split(",").forEach((v, i) => o[header[i]] = v);
-      return o;
-    });
-    render();
+fetch("data/history/breadth_full_history.csv")
+.then(r=>r.text()).then(t=>{
+  const l=t.trim().split("\n");
+  const h=l[0].split(",");
+  const d=l.slice(1).map(r=>{
+    const v=r.split(",");
+    let o={}; h.forEach((k,i)=>o[k]=v[i]); return o;
   });
+  render(d);
+});
 
-function render() {
-  const idx = document.getElementById("index").value;
-  const x = raw.map(d => new Date(d.Date));
-
-  const traces = [
-    {
-      x, y: raw.map(d => +d[`${idx}_vol_20_z`]),
-      name: "Index Vol Z(20)",
-      line: {width: 2}
-    },
-    {
-      x, y: raw.map(d => +d.median_stock_vol_20_z),
-      name: "Median Stock Vol Z",
-      line: {dash: "dot"}
-    }
-  ];
-
-  Plotly.newPlot("chart", traces, {
-    title: idx.toUpperCase() + " Volatility Regime",
-    hovermode: "x unified",
-    legend: {orientation: "h"},
-    yaxis: {zeroline: true}
-  }, {
-    scrollZoom: false
-  });
+function render(d){
+  const idx=document.getElementById("index").value;
+  Plotly.newPlot("chart", [
+    {x:d.map(r=>r.Date), y:d.map(r=>+r[`${idx}_vol_20_z`]), name:"Index Vol Z"},
+    {x:d.map(r=>r.Date), y:d.map(r=>+r.median_stock_vol_20_z), name:"Stock Vol Breadth Z"}
+  ], {
+    title:"Volatility",
+    dragmode:"pan",
+    hovermode:"x unified"
+  }, {scrollZoom:false});
 }
 
-document.getElementById("index").onchange = render;
+document.getElementById("index").onchange=()=>location.reload();
 </script>
-
 </body>
 </html>
