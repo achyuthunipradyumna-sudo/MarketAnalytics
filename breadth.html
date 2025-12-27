@@ -2,17 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Breadth Heatmap – Market State</title>
+<title>Breadth — Participation & Internal Strength</title>
 
 <style>
 body {
-  font-family: Arial, sans-serif;
-  margin: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  margin: 16px;
 }
 
-h2 {
-  margin-bottom: 10px;
-}
+h2 { margin-bottom: 8px; }
 
 .controls {
   margin-bottom: 12px;
@@ -31,8 +29,8 @@ table {
 
 th, td {
   border: 1px solid #ddd;
-  padding: 6px;
-  text-align: center;
+  padding: 4px 6px;
+  text-align: right;
 }
 
 th {
@@ -43,130 +41,104 @@ th {
 }
 
 td.date {
-  font-weight: bold;
-  background: #fafafa;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  text-align: left;
+  z-index: 1;
 }
 
-.green { background-color: #b6e3b6; }
-.lightgreen { background-color: #dff2df; }
-.red { background-color: #f4b6b6; }
-.lightred { background-color: #fde0e0; }
-.neutral { background-color: #ffffff; }
-
+.green { background: #d6f5d6; }
+.red   { background: #f8d7da; }
+.neutral { background: #eee; }
 </style>
 </head>
 
 <body>
 
-<h2>📊 Market Breadth – Daily Heatmap</h2>
+<h2>Breadth — Participation & Internal Strength</h2>
 
 <div class="controls">
   View:
   <select id="mode">
     <option value="z">Z-Scores</option>
-    <option value="raw">Raw Values</option>
-  </select>
-
-  Lookback:
-  <select id="window">
-    <option value="30">1 Month</option>
-    <option value="90">3 Months</option>
-    <option value="180">6 Months</option>
-    <option value="260">1 Year</option>
-    <option value="all">Full History</option>
+    <option value="raw">Raw %</option>
+    <option value="chg">Δ 20-Day</option>
   </select>
 </div>
 
-<div id="table"></div>
+<table id="table"></table>
 
 <script>
-const CSV_PATH = "data/history/breadth_full_history.csv";
+const DATA_URL = "data/history/breadth_full_history.csv";
 
-fetch(CSV_PATH)
+let rows = [];
+let headers = [];
+
+fetch(DATA_URL)
   .then(r => r.text())
   .then(text => {
-    const rows = text.trim().split("\n");
-    const header = rows[0].split(",");
-    const data = rows.slice(1).map(r => {
-      const v = r.split(",");
+    const lines = text.trim().split("\n");
+    headers = lines[0].split(",");
+    rows = lines.slice(1).map(l => {
+      const v = l.split(",");
       let o = {};
-      header.forEach((h, i) => o[h] = v[i]);
+      headers.forEach((h, i) => o[h] = parseFloat(v[i]) || v[i]);
       return o;
     });
-
-    window.fullData = data;
     render();
   });
 
-function colorZ(v) {
-  if (v >= 1.0) return "green";
-  if (v >= 0.3) return "lightgreen";
-  if (v <= -1.0) return "red";
-  if (v <= -0.3) return "lightred";
-  return "neutral";
-}
-
-function colorRaw(v) {
-  if (v >= 70) return "green";
-  if (v >= 55) return "lightgreen";
-  if (v <= 30) return "red";
-  if (v <= 45) return "lightred";
+function color(v) {
+  if (v > 1) return "green";
+  if (v < -1) return "red";
   return "neutral";
 }
 
 function render() {
   const mode = document.getElementById("mode").value;
-  const windowSel = document.getElementById("window").value;
+  const tbl = document.getElementById("table");
+  tbl.innerHTML = "";
 
-  let data = [...window.fullData];
-  if (windowSel !== "all") {
-    data = data.slice(-parseInt(windowSel));
-  }
+  const cols = [
+    "Date",
+    "ad_z_50",
+    "pct_above_20dma_" + mode,
+    "pct_above_50dma_" + mode,
+    "pct_above_200dma_" + mode,
+    "nhnl_z",
+    "median_stock_vol_20_z"
+  ].filter(c => headers.includes(c));
 
-  let html = "<table><tr>";
-  html += "<th>Date</th>";
-  html += "<th>AD Z</th>";
-  html += "<th>%>20DMA</th>";
-  html += "<th>Δ20DMA</th>";
-  html += "<th>%>50DMA</th>";
-  html += "<th>Δ50DMA</th>";
-  html += "<th>%>200DMA</th>";
-  html += "<th>Δ200DMA</th>";
-  html += "<th>NH–NL Z</th>";
-  html += "</tr>";
-
-  data.forEach(d => {
-    html += `<tr><td class="date">${d.Date}</td>`;
-
-    const cells = [
-      ["ad_z_50", true],
-      ["pct_above_20dma", false],
-      ["pct_above_20dma_chg", false],
-      ["pct_above_50dma", false],
-      ["pct_above_50dma_chg", false],
-      ["pct_above_200dma", false],
-      ["pct_above_200dma_chg", false],
-      ["nhnl_z", true]
-    ];
-
-    cells.forEach(([k, isZ]) => {
-      const val = parseFloat(d[k] || d[`${k}_z`] || 0);
-      const cls = mode === "z" || isZ
-        ? colorZ(val)
-        : colorRaw(val);
-
-      html += `<td class="${cls}">${isNaN(val) ? "" : val.toFixed(2)}</td>`;
-    });
-
-    html += "</tr>";
+  // Header
+  const trh = document.createElement("tr");
+  cols.forEach(c => {
+    const th = document.createElement("th");
+    th.innerText = c.replaceAll("_", " ");
+    trh.appendChild(th);
   });
+  tbl.appendChild(trh);
 
-  html += "</table>";
-  document.getElementById("table").innerHTML = html;
+  // Rows
+  rows.slice(-260).reverse().forEach(r => {
+    const tr = document.createElement("tr");
+    cols.forEach(c => {
+      const td = document.createElement("td");
+      if (c === "Date") {
+        td.innerText = r[c];
+        td.className = "date";
+      } else {
+        const v = r[c];
+        td.innerText = isNaN(v) ? "" : v.toFixed(2);
+        td.className = color(v);
+      }
+      tr.appendChild(td);
+    });
+    tbl.appendChild(tr);
+  });
 }
 
 document.getElementById("mode").onchange = render;
-document.getElementById("window").onchange = render;
 </script>
 
 </body>
