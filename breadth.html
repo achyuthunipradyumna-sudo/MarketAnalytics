@@ -68,21 +68,21 @@ const COLUMNS = [
 // EXCEL-STYLE PASTEL COLOR SCALE
 // ===================================
 function heatColor(v) {
-  if (v < 10) return "#8C3909";
-  if (v < 20) return "#C65A1E";
-  if (v < 30) return "#E08B5A";
-  if (v < 40) return "#F6C39F";
-  if (v < 45) return "#F4E6D6";
-  if (v <= 55) return "#F8F9F7"; // NEUTRAL
-  if (v <= 60) return "#E1F2E8";
-  if (v <= 70) return "#C0E5CC";
-  if (v <= 80) return "#8FD3C1";
-  if (v <= 90) return "#6AB5AC";
-  return "#3E8F88";
+  if (v < 10)  return "#F8696B";
+  if (v < 20)  return "#F4A582";
+  if (v < 30)  return "#FDDCC8";
+  if (v < 40)  return "#FDEEEE";
+  if (v < 45)  return "#FFF5F5";
+  if (v <= 55) return "#FFFFFF"; // Excel neutral
+  if (v <= 60) return "#F4FBF2";
+  if (v <= 70) return "#D9F0D3";
+  if (v <= 80) return "#A6D96A";
+  if (v <= 90) return "#63BE7B";
+  return "#3FA35A";
 }
 
 function textColor(v) {
-  return (v >= 45 && v <= 55) ? "#000" : "#fff";
+  return (v >= 45 && v <= 55) ? "#000000" : "#000000";
 }
 
 // ===================================
