@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Breadth Heatmap</title>
+<title>Market Breadth – Heatmap</title>
 
 <style>
 body {
@@ -10,14 +10,17 @@ body {
   margin: 16px;
 }
 
+h2 { margin-bottom: 10px; }
+
 .controls {
   margin-bottom: 12px;
 }
 
 button, select {
   padding: 6px 10px;
-  margin-right: 8px;
+  margin-right: 6px;
   font-size: 14px;
+  cursor: pointer;
 }
 
 table {
@@ -28,7 +31,7 @@ table {
 
 th, td {
   border: 1px solid #ddd;
-  padding: 4px;
+  padding: 4px 6px;
   text-align: right;
 }
 
@@ -36,6 +39,7 @@ th {
   background: #f5f5f5;
   position: sticky;
   top: 0;
+  z-index: 2;
 }
 
 td.date {
@@ -44,30 +48,35 @@ td.date {
   font-weight: 600;
 }
 
-/* Z-score colors */
-.z-pos-strong { background: #1b7837; color: white; }
-.z-pos { background: #7fbf7b; }
-.z-neutral { background: #f7f7f7; }
-.z-neg { background: #ef8a62; }
-.z-neg-strong { background: #b2182b; color: white; }
+/* ---------- Z SCORE COLORS ---------- */
+.z-pos-strong { background:#1a9850; color:white; }
+.z-pos        { background:#91cf60; }
+.z-neutral    { background:#f7f7f7; }
+.z-neg        { background:#fc8d59; }
+.z-neg-strong { background:#d73027; color:white; }
 
-/* Raw semantic colors */
-.raw-good { background: #1a9850; color: white; }
-.raw-ok { background: #91cf60; }
-.raw-neutral { background: #f7f7f7; }
-.raw-bad { background: #fc8d59; }
-.raw-risk { background: #d73027; color: white; }
+/* ---------- RAW % COLORS ---------- */
+.raw-pct-strong { background:#1a9850; color:white; }
+.raw-pct-pos    { background:#91cf60; }
+.raw-pct-mid    { background:#f7f7f7; }
+.raw-pct-neg    { background:#fdae61; }
+.raw-pct-bad    { background:#d73027; color:white; }
+
+/* ---------- RAW COUNT COLORS ---------- */
+.raw-pos { background:#a6d96a; }
+.raw-neg { background:#f46d43; color:white; }
+.raw-zero { background:#f7f7f7; }
 </style>
 </head>
 
 <body>
 
-<h2>Breadth Heatmap</h2>
+<h2>📊 Market Breadth — Participation & Internal Strength</h2>
 
 <div class="controls">
   View:
-  <button onclick="setMode('z')">Z-Scores</button>
   <button onclick="setMode('raw')">Raw</button>
+  <button onclick="setMode('z')">Z-Scores</button>
 
   Lookback:
   <select onchange="setLookback(this.value)">
@@ -83,24 +92,31 @@ td.date {
 
 <script>
 let DATA = [];
-let MODE = "z";
+let MODE = "raw";
 let LOOKBACK = "all";
 
-/* RAW columns ONLY — no deltas */
+/* -------- COLUMN DEFINITIONS -------- */
 const RAW_COLS = [
-  "adv","dec","ad",
-  "pct_above_20dma","pct_above_50dma","pct_above_200dma",
-  "nh","nl","nhnl",
-  "median_stock_vol_20","median_stock_vol_50"
+  {k:"adv", l:"Adv"},
+  {k:"dec", l:"Dec"},
+  {k:"ad",  l:"Net A/D"},
+  {k:"pct_above_20dma",  l:"% > 20DMA"},
+  {k:"pct_above_50dma",  l:"% > 50DMA"},
+  {k:"pct_above_200dma", l:"% > 200DMA"},
+  {k:"nh", l:"NH"},
+  {k:"nl", l:"NL"},
+  {k:"nhnl", l:"NH–NL"}
 ];
 
 const Z_COLS = [
-  "ad_z_50",
-  "pct_above_20dma_z","pct_above_50dma_z","pct_above_200dma_z",
-  "nhnl_z",
-  "median_stock_vol_20_z","median_stock_vol_50_z"
+  {k:"ad_z_50", l:"A/D Z(50)"},
+  {k:"pct_above_20dma_z", l:"%>20DMA Z"},
+  {k:"pct_above_50dma_z", l:"%>50DMA Z"},
+  {k:"pct_above_200dma_z", l:"%>200DMA Z"},
+  {k:"nhnl_z", l:"NH–NL Z"}
 ];
 
+/* -------- FETCH DATA -------- */
 fetch("data/history/breadth_full_history.csv")
 .then(r => r.text())
 .then(text => {
@@ -111,14 +127,14 @@ fetch("data/history/breadth_full_history.csv")
     let o = {};
     headers.forEach((h,i)=>o[h]=v[i]);
     return o;
-  });
+  }).reverse(); // 🔑 LATEST DATE ON TOP
   render();
 });
 
 function setMode(m){ MODE=m; render(); }
 function setLookback(l){ LOOKBACK=l; render(); }
 
-/* Z-score coloring */
+/* -------- COLOR LOGIC -------- */
 function zClass(v){
   v = parseFloat(v);
   if (v >= 1.5) return "z-pos-strong";
@@ -128,59 +144,51 @@ function zClass(v){
   return "z-neg-strong";
 }
 
-/* Raw semantic coloring */
-function rawClass(col, v){
+function rawPctClass(v){
   v = parseFloat(v);
-
-  // % participation
-  if (col.includes("pct_above")) {
-    if (v >= 60) return "raw-good";
-    if (v >= 45) return "raw-ok";
-    if (v >= 30) return "raw-neutral";
-    return "raw-bad";
-  }
-
-  // A/D or NH–NL
-  if (["ad","nhnl"].includes(col)) {
-    if (v > 500) return "raw-good";
-    if (v > 0) return "raw-ok";
-    if (v > -500) return "raw-neutral";
-    return "raw-bad";
-  }
-
-  // Volatility (LOW is good)
-  if (col.includes("vol")) {
-    if (v <= 0.25) return "raw-good";
-    if (v <= 0.35) return "raw-ok";
-    if (v <= 0.45) return "raw-neutral";
-    return "raw-risk";
-  }
-
-  return "raw-neutral";
+  if (v >= 70) return "raw-pct-strong";
+  if (v >= 55) return "raw-pct-pos";
+  if (v >= 45) return "raw-pct-mid";
+  if (v >= 30) return "raw-pct-neg";
+  return "raw-pct-bad";
 }
 
+function rawCountClass(v){
+  v = parseInt(v);
+  if (v > 0) return "raw-pos";
+  if (v < 0) return "raw-neg";
+  return "raw-zero";
+}
+
+/* -------- RENDER -------- */
 function render(){
-  let rows = [...DATA];
-
+  let rows = DATA;
   if (LOOKBACK !== "all"){
-    rows = rows.slice(-parseInt(LOOKBACK));
+    rows = rows.slice(0, parseInt(LOOKBACK));
   }
-
-  // 🔑 Latest date on TOP
-  rows.reverse();
 
   const cols = MODE==="z" ? Z_COLS : RAW_COLS;
 
   let html = "<table><tr><th>Date</th>";
-  cols.forEach(c=>html+=`<th>${c}</th>`);
+  cols.forEach(c=>html+=`<th>${c.l}</th>`);
   html+="</tr>";
 
   rows.forEach(r=>{
     html+=`<tr><td class="date">${r.Date}</td>`;
     cols.forEach(c=>{
-      const val = r[c] || "";
-      const cls = MODE==="z" ? zClass(val) : rawClass(c,val);
-      html+=`<td class="${cls}">${val}</td>`;
+      let val = r[c.k];
+      if (!val) val = "";
+
+      let cls="";
+      if (MODE==="z") cls = zClass(val);
+      else if (c.k.includes("pct_above")) cls = rawPctClass(val);
+      else cls = rawCountClass(val);
+
+      let disp = val;
+      if (c.k.includes("pct_above")) disp = (+val).toFixed(2);
+      else if (!isNaN(val)) disp = Math.round(val);
+
+      html+=`<td class="${cls}">${disp}</td>`;
     });
     html+="</tr>";
   });
