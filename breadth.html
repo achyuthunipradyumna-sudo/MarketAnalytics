@@ -2,193 +2,170 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Market Breadth Heatmap</title>
-
-<!-- Reliable CDN for GitHub Pages -->
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<title>Market Breadth – Colored Table</title>
 
 <style>
 body {
   font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  margin: 14px;
+  padding: 16px;
 }
 
 h2 {
-  margin: 0 0 8px 0;
-}
-
-.controls {
-  margin-bottom: 10px;
-}
-
-.controls button {
-  padding: 6px 10px;
-  margin-right: 6px;
-  border: 1px solid #ccc;
-  background: #f5f5f5;
-  cursor: pointer;
-}
-
-.controls button.active {
-  background: #ddd;
-  font-weight: 600;
-}
-
-/* ===== Table ===== */
-.table-wrap {
-  max-height: 78vh;
-  overflow: auto;
-  border: 1px solid #ddd;
+  margin-bottom: 8px;
 }
 
 table {
   border-collapse: collapse;
   font-size: 12px;
-  width: max-content;
 }
 
 th, td {
   border: 1px solid #ddd;
   padding: 4px 6px;
   text-align: right;
-  white-space: nowrap;
 }
 
 th {
-  background: #f3f3f3;
+  background: #f5f5f5;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 1;
 }
 
-/* ===== Brighter Excel-style heatmap palette ===== */
-.bkt-0  { background:#F44336; color:#102010; font-weight:600; }
-.bkt-1  { background:#F77B72; }
-.bkt-2  { background:#F9B4AD; }
-.bkt-3  { background:#FCDDD9; }
-.bkt-4  { background:#FFF0EE; }
-.bkt-5  { background:#FFFFFF; }
-.bkt-6  { background:#EAF6EA; }
-.bkt-7  { background:#C9EBC9; }
-.bkt-8  { background:#9EDB9E; }
-.bkt-9  { background:#5FBF73; }
-.bkt-10 { background:#2E9E5E; color:#102010; font-weight:600; }
+td.date {
+  text-align: left;
+  font-weight: 600;
+}
+
+/* smooth color interpolation */
+.cell {
+  color: #111;
+}
+
+/* text contrast for dark cells */
+.dark {
+  color: #fff;
+}
 </style>
 </head>
 
 <body>
 
-<h2>Market Breadth – Heatmap</h2>
+<h2>Market Breadth (Excel-style Gradients)</h2>
 
-<div class="controls">
-  <button onclick="setRange(1, this)">1M</button>
-  <button onclick="setRange(3, this)">3M</button>
-  <button onclick="setRange(6, this)">6M</button>
-  <button onclick="setRange(12, this)">1Y</button>
-  <button onclick="setRange(24, this)">2Y</button>
-  <button onclick="setRange(36, this)">3Y</button>
-  <button onclick="setRange(0, this)" class="active">Full</button>
-</div>
-
-<div class="table-wrap">
-  <table id="tbl"></table>
-</div>
+<table id="tbl">
+<thead>
+<tr>
+  <th>Date</th>
+  <th>%&gt;20DMA</th>
+  <th>%&gt;50DMA</th>
+  <th>%&gt;200DMA</th>
+  <th>Adv</th>
+  <th>Dec</th>
+  <th>A/D</th>
+  <th>NH</th>
+  <th>NL</th>
+  <th>NH–NL</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
 
 <script>
-/* ================= CONFIG ================= */
-const CSV_PATH = "/MarketAnalytics/data/history/breadth_full_history.csv";   // relative path for GitHub Pages
-const MAX_ROWS_RENDER = 800;           // DOM safety
-const Z_COL_SUFFIX = "_z";
+const CSV_URL =
+  "https://achyuthunipradyumna-sudo.github.io/MarketAnalytics/data/history/breadth_full_history.csv";
 
-/* ================= STATE ================= */
-let rawData = [];
-let headers = [];
+const COLS = [
+  "Date",
+  "pct_above_20dma",
+  "pct_above_50dma",
+  "pct_above_200dma",
+  "adv",
+  "dec",
+  "ad",
+  "nh",
+  "nl",
+  "nhnl"
+];
 
-/* ================= LOAD CSV ================= */
-Papa.parse(CSV_PATH, {
-  download: true,
-  header: true,
-  dynamicTyping: true,
-  skipEmptyLines: true,
-  worker: true,
-  complete: res => {
-    rawData = res.data
-      .filter(r => r.Date)
-      .sort((a, b) => new Date(b.Date) - new Date(a.Date));
-
-    headers = res.meta.fields;
-    render(rawData);
-  },
-  error: err => {
-    document.body.innerHTML =
-      "<h3 style='color:red'>CSV Load Error</h3><pre>" + err + "</pre>";
-  }
-});
-
-/* ================= TIME RANGE ================= */
-function setRange(months, btn) {
-  document.querySelectorAll(".controls button")
-    .forEach(b => b.classList.remove("active"));
-
-  btn.classList.add("active");
-
-  if (months === 0) {
-    render(rawData);
-    return;
-  }
-
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
-
-  render(rawData.filter(r => new Date(r.Date) >= cutoff));
+// linear interpolation between two colors
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
-/* ================= HEATMAP BUCKET ================= */
-function bucket(v) {
-  if (v === null || v === undefined || isNaN(v)) return "";
-  const z = Math.max(-3, Math.min(3, v));
-  return "bkt-" + Math.round(((z + 3) / 6) * 10);
+function lerpColor(c1, c2, t) {
+  return `rgb(
+    ${Math.round(lerp(c1[0], c2[0], t))},
+    ${Math.round(lerp(c1[1], c2[1], t))},
+    ${Math.round(lerp(c1[2], c2[2], t))}
+  )`;
 }
 
-/* ================= RENDER ================= */
-function render(data) {
-  const tbl = document.getElementById("tbl");
-  tbl.innerHTML = "";
+// Excel-like Red → Yellow → Green
+const RED = [215, 48, 39];
+const YELLOW = [255, 255, 191];
+const GREEN = [26, 152, 80];
 
-  const thead = document.createElement("thead");
-  const trh = document.createElement("tr");
-  headers.forEach(h => {
-    const th = document.createElement("th");
-    th.textContent = h;
-    trh.appendChild(th);
-  });
-  thead.appendChild(trh);
-  tbl.appendChild(thead);
+// percent scale 0–100
+function pctColor(v) {
+  if (v <= 50) return lerpColor(RED, YELLOW, v / 50);
+  return lerpColor(YELLOW, GREEN, (v - 50) / 50);
+}
 
-  const tbody = document.createElement("tbody");
+// centered scale (−M → 0 → +M)
+function centeredColor(v, maxAbs) {
+  if (v < 0) return lerpColor(RED, YELLOW, (v + maxAbs) / maxAbs);
+  return lerpColor(YELLOW, GREEN, v / maxAbs);
+}
 
-  data.slice(0, MAX_ROWS_RENDER).forEach(row => {
-    const tr = document.createElement("tr");
-    headers.forEach(h => {
-      const td = document.createElement("td");
-      let val = row[h];
-      if (typeof val === "number") val = val.toFixed(2);
-      td.textContent = val ?? "";
-      if (h.endsWith(Z_COL_SUFFIX)) td.className = bucket(row[h]);
-      tr.appendChild(td);
+fetch(CSV_URL)
+  .then(r => r.text())
+  .then(txt => {
+    const lines = txt.trim().split("\n");
+    const header = lines[0].split(",");
+    const idx = Object.fromEntries(header.map((h, i) => [h, i]));
+
+    const rows = lines.slice(1)
+      .map(l => l.split(","))
+      .filter(r => r.length === header.length)
+      .reverse(); // latest on top
+
+    const tbody = document.querySelector("#tbl tbody");
+
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+
+      COLS.forEach(c => {
+        const td = document.createElement("td");
+        const val = r[idx[c]];
+
+        if (c === "Date") {
+          td.textContent = val;
+          td.className = "date";
+        } else {
+          const num = parseFloat(val);
+          td.textContent = num.toFixed(2);
+
+          let bg = null;
+          if (c.startsWith("pct_above")) {
+            bg = pctColor(num);
+          }
+          if (c === "ad" || c === "nhnl") {
+            bg = centeredColor(num, 2500);
+          }
+
+          if (bg) {
+            td.style.background = bg;
+            td.classList.add("cell");
+            if (num < 0 || num > 80) td.classList.add("dark");
+          }
+        }
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
     });
-    tbody.appendChild(tr);
   });
-
-  tbl.appendChild(tbody);
-}
-
-/* ================= DEV SAFETY ================= */
-window.onerror = function(msg, src, line) {
-  document.body.innerHTML =
-    "<h3 style='color:red'>JavaScript Error</h3>" +
-    "<pre>" + msg + "\nLine: " + line + "</pre>";
-};
 </script>
 
 </body>
