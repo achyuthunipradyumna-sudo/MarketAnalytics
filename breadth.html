@@ -1,84 +1,173 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Breadth Dashboard</title>
-<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<meta charset="utf-8" />
+<title>Breadth Heatmap – Market State</title>
 
 <style>
-body { font-family: Arial; margin: 20px; }
-.controls { margin-bottom: 12px; }
-button { margin-right: 6px; padding: 6px 10px; }
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+h2 {
+  margin-bottom: 10px;
+}
+
+.controls {
+  margin-bottom: 12px;
+}
+
+select {
+  padding: 6px;
+  font-size: 14px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  text-align: center;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: #f5f5f5;
+  z-index: 2;
+}
+
+td.date {
+  font-weight: bold;
+  background: #fafafa;
+}
+
+.green { background-color: #b6e3b6; }
+.lightgreen { background-color: #dff2df; }
+.red { background-color: #f4b6b6; }
+.lightred { background-color: #fde0e0; }
+.neutral { background-color: #ffffff; }
+
 </style>
 </head>
 
 <body>
-<h2>Breadth — Participation & Internal Strength</h2>
+
+<h2>📊 Market Breadth – Daily Heatmap</h2>
 
 <div class="controls">
-  Index:
-  <select id="indexSel">
-    <option value="nifty50">NIFTY 50</option>
-    <option value="nifty_total">NIFTY TOTAL MARKET</option>
+  View:
+  <select id="mode">
+    <option value="z">Z-Scores</option>
+    <option value="raw">Raw Values</option>
   </select>
 
-  Range:
-  <button onclick="setRange(30)">1M</button>
-  <button onclick="setRange(90)">3M</button>
-  <button onclick="setRange(180)">6M</button>
-  <button onclick="setRange(365)">1Y</button>
-  <button onclick="setRange(1825)">5Y</button>
-  <button onclick="setRange('all')">All</button>
+  Lookback:
+  <select id="window">
+    <option value="30">1 Month</option>
+    <option value="90">3 Months</option>
+    <option value="180">6 Months</option>
+    <option value="260">1 Year</option>
+    <option value="all">Full History</option>
+  </select>
 </div>
 
-<div id="chart"></div>
+<div id="table"></div>
 
 <script>
-const DATA_URL = "data/history/breadth_full_history.csv";
-let RAW = [];
-let RANGE = 365;
+const CSV_PATH = "data/history/breadth_full_history.csv";
 
-const PLOT_CONFIG = {
-  responsive:true, scrollZoom:false, doubleClick:false,
-  displaylogo:false,
-  modeBarButtonsToRemove:[
-    "zoom2d","select2d","lasso2d",
-    "zoomIn2d","zoomOut2d","autoScale2d"
-  ]
-};
+fetch(CSV_PATH)
+  .then(r => r.text())
+  .then(text => {
+    const rows = text.trim().split("\n");
+    const header = rows[0].split(",");
+    const data = rows.slice(1).map(r => {
+      const v = r.split(",");
+      let o = {};
+      header.forEach((h, i) => o[h] = v[i]);
+      return o;
+    });
 
-fetch(DATA_URL)
-.then(r=>r.text())
-.then(t=>{
-  const rows=t.trim().split("\n");
-  const h=rows[0].split(",");
-  RAW=rows.slice(1).map(r=>{
-    const o={}; r.split(",").forEach((v,i)=>o[h[i]]=v); return o;
+    window.fullData = data;
+    render();
   });
-  render();
-});
 
-function setRange(r){ RANGE=r; render(); }
-
-function render(){
-  const d = RANGE==="all"? RAW : RAW.slice(-RANGE);
-  const x = d.map(r=>r.Date);
-
-  const traces = [
-    {x,y:d.map(r=>+r.ad_z_50), name:"AD Z(50)"},
-    {x,y:d.map(r=>+r.pct_above_20dma_z), name:"%>20DMA Z"},
-    {x,y:d.map(r=>+r.pct_above_50dma_z), name:"%>50DMA Z"},
-    {x,y:d.map(r=>+r.pct_above_200dma_z), name:"%>200DMA Z"},
-    {x,y:d.map(r=>+r.nhnl_z), name:"NH-NL Z"}
-  ];
-
-  Plotly.newPlot("chart", traces, {
-    dragmode:"pan",
-    hovermode:"x unified",
-    yaxis:{zeroline:true,title:"Z-Score"},
-    legend:{orientation:"h"}
-  }, PLOT_CONFIG);
+function colorZ(v) {
+  if (v >= 1.0) return "green";
+  if (v >= 0.3) return "lightgreen";
+  if (v <= -1.0) return "red";
+  if (v <= -0.3) return "lightred";
+  return "neutral";
 }
+
+function colorRaw(v) {
+  if (v >= 70) return "green";
+  if (v >= 55) return "lightgreen";
+  if (v <= 30) return "red";
+  if (v <= 45) return "lightred";
+  return "neutral";
+}
+
+function render() {
+  const mode = document.getElementById("mode").value;
+  const windowSel = document.getElementById("window").value;
+
+  let data = [...window.fullData];
+  if (windowSel !== "all") {
+    data = data.slice(-parseInt(windowSel));
+  }
+
+  let html = "<table><tr>";
+  html += "<th>Date</th>";
+  html += "<th>AD Z</th>";
+  html += "<th>%>20DMA</th>";
+  html += "<th>Δ20DMA</th>";
+  html += "<th>%>50DMA</th>";
+  html += "<th>Δ50DMA</th>";
+  html += "<th>%>200DMA</th>";
+  html += "<th>Δ200DMA</th>";
+  html += "<th>NH–NL Z</th>";
+  html += "</tr>";
+
+  data.forEach(d => {
+    html += `<tr><td class="date">${d.Date}</td>`;
+
+    const cells = [
+      ["ad_z_50", true],
+      ["pct_above_20dma", false],
+      ["pct_above_20dma_chg", false],
+      ["pct_above_50dma", false],
+      ["pct_above_50dma_chg", false],
+      ["pct_above_200dma", false],
+      ["pct_above_200dma_chg", false],
+      ["nhnl_z", true]
+    ];
+
+    cells.forEach(([k, isZ]) => {
+      const val = parseFloat(d[k] || d[`${k}_z`] || 0);
+      const cls = mode === "z" || isZ
+        ? colorZ(val)
+        : colorRaw(val);
+
+      html += `<td class="${cls}">${isNaN(val) ? "" : val.toFixed(2)}</td>`;
+    });
+
+    html += "</tr>";
+  });
+
+  html += "</table>";
+  document.getElementById("table").innerHTML = html;
+}
+
+document.getElementById("mode").onchange = render;
+document.getElementById("window").onchange = render;
 </script>
+
 </body>
 </html>
