@@ -2,20 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Market Breadth – Heatmap</title>
+<title>Market Breadth Heatmap</title>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
 body {
   font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  padding: 16px;
+  margin: 14px;
 }
 
-h2 {
-  margin-bottom: 10px;
-}
+h2 { margin-bottom: 6px; }
 
 .controls {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 button {
@@ -25,39 +25,36 @@ button {
   background: #f5f5f5;
   cursor: pointer;
 }
-
 button.active {
   background: #ddd;
   font-weight: 600;
 }
 
+/* ===== Table ===== */
+.table-wrap {
+  max-height: 78vh;
+  overflow: auto;
+  border: 1px solid #ddd;
+}
+
 table {
   border-collapse: collapse;
   font-size: 12px;
-  width: 100%;
+  width: max-content;
 }
 
 th, td {
   border: 1px solid #ddd;
-  padding: 4px 8px;
+  padding: 4px 6px;
   text-align: right;
   white-space: nowrap;
 }
 
 th {
-  background: #f2f2f2;
+  background: #f3f3f3;
   position: sticky;
   top: 0;
   z-index: 2;
-}
-
-td.date {
-  text-align: left;
-  font-weight: 600;
-  background: #fafafa;
-  position: sticky;
-  left: 0;
-  z-index: 1;
 }
 
 /* ===== Excel pastel heatmap palette ===== */
@@ -72,165 +69,102 @@ td.date {
 .bkt-8  { background:#A6D96A; }
 .bkt-9  { background:#63BE7B; }
 .bkt-10 { background:#3FA35A; }
-
-td {
-  color: #000;
-}
 </style>
 </head>
 
 <body>
-
-<h2>Market Breadth — Participation & Internal Strength</h2>
+<h2>Market Breadth – Heatmap</h2>
 
 <div class="controls">
-  View:
-  <button id="btn1"  onclick="setRange(1)">1M</button>
-  <button id="btn3"  onclick="setRange(3)">3M</button>
-  <button id="btn6"  onclick="setRange(6)" class="active">6M</button>
-  <button id="btn12" onclick="setRange(12)">1Y</button>
-  <button id="btn36" onclick="setRange(36)">3Y</button>
+  <button onclick="setRange(1)">1M</button>
+  <button onclick="setRange(3)">3M</button>
+  <button onclick="setRange(6)">6M</button>
+  <button onclick="setRange(12)">1Y</button>
+  <button onclick="setRange(24)">2Y</button>
+  <button onclick="setRange(36)">3Y</button>
+  <button onclick="setRange(0)" class="active">Full</button>
 </div>
 
-<table id="heatmap"></table>
+<div class="table-wrap">
+  <table id="tbl"></table>
+</div>
 
 <script>
 /* ================= CONFIG ================= */
-const CSV_PATH = "data/history/breadth_full_history.csv";
+const CSV_PATH = "data/breadth.csv";
+const MAX_ROWS_RENDER = 800;   // keeps DOM fast
+const Z_COL_SUFFIX = "_z";
 
-const COLUMNS = [
-  { key:"adv", label:"Adv" },
-  { key:"dec", label:"Dec" },
-  { key:"ad", label:"Net A/D" },
-  { key:"pct_above_20dma", label:"% > 20DMA", heat:true },
-  { key:"pct_above_50dma", label:"% > 50DMA", heat:true },
-  { key:"pct_above_200dma", label:"% > 200DMA", heat:true },
-  { key:"nh", label:"NH" },
-  { key:"nl", label:"NL" },
-  { key:"nhnl", label:"NH–NL" }
-];
+/* ================= STATE ================= */
+let rawData = [];
+let headers = [];
 
-let FULL_DATA = [];
-let RANGE_CACHE = {};
-let CURRENT_RANGE = 6;
+/* ================= LOAD CSV ================= */
+Papa.parse(CSV_PATH, {
+  download: true,
+  header: true,
+  dynamicTyping: true,
+  skipEmptyLines: true,
+  worker: true,
+  complete: res => {
+    rawData = res.data.sort((a,b)=> new Date(b.Date) - new Date(a.Date));
+    headers = res.meta.fields;
+    render(rawData);
+  }
+});
 
-/* ================= HEATMAP BUCKET ================= */
+/* ================= TIME RANGE ================= */
+function setRange(months) {
+  document.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
+  event.target.classList.add("active");
+
+  if (months === 0) {
+    render(rawData);
+    return;
+  }
+
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  render(rawData.filter(r => new Date(r.Date) >= cutoff));
+}
+
+/* ================= HEATMAP ================= */
 function bucket(v) {
-  if (v < 10) return 0;
-  if (v < 20) return 1;
-  if (v < 30) return 2;
-  if (v < 40) return 3;
-  if (v < 45) return 4;
-  if (v <= 55) return 5;   // neutral white
-  if (v <= 60) return 6;
-  if (v <= 70) return 7;
-  if (v <= 80) return 8;
-  if (v <= 90) return 9;
-  return 10;
+  if (v === null || v === undefined || isNaN(v)) return "";
+  const z = Math.max(-3, Math.min(3, v));
+  return "bkt-" + Math.round(((z + 3) / 6) * 10);
 }
 
-/* ================= CSV PARSER ================= */
-function parseCSV(text) {
-  const lines = text.trim().split("\n");
-  const headers = lines[0].split(",");
-  return lines.slice(1).map(r => {
-    const vals = r.split(",");
-    const o = {};
-    headers.forEach((h,i)=>o[h]=vals[i]);
-    return o;
-  });
-}
-
-/* ================= BUILD HEADER (ONCE) ================= */
-function buildHeader() {
-  const table = document.getElementById("heatmap");
+/* ================= RENDER ================= */
+function render(data) {
+  const tbl = document.getElementById("tbl");
+  tbl.innerHTML = "";
 
   const thead = document.createElement("thead");
-  const tr = document.createElement("tr");
-
-  const thDate = document.createElement("th");
-  thDate.textContent = "Date";
-  tr.appendChild(thDate);
-
-  COLUMNS.forEach(c=>{
+  const trh = document.createElement("tr");
+  headers.forEach(h => {
     const th = document.createElement("th");
-    th.textContent = c.label;
-    tr.appendChild(th);
+    th.textContent = h;
+    trh.appendChild(th);
   });
+  thead.appendChild(trh);
+  tbl.appendChild(thead);
 
-  thead.appendChild(tr);
-  table.appendChild(thead);
-  table.appendChild(document.createElement("tbody"));
-}
-
-/* ================= PRE-COMPUTE TIME RANGES ================= */
-function prepareRanges() {
-  const latest = new Date(FULL_DATA[FULL_DATA.length - 1].Date);
-
-  [1,3,6,12,36].forEach(m=>{
-    const cutoff = new Date(latest);
-    cutoff.setMonth(cutoff.getMonth() - m);
-
-    RANGE_CACHE[m] = FULL_DATA
-      .filter(r => new Date(r.Date) >= cutoff)
-      .reverse(); // latest on top
-  });
-}
-
-/* ================= RENDER BODY ONLY ================= */
-function renderBody(months) {
-  const tbody = document.querySelector("#heatmap tbody");
-  tbody.innerHTML = "";
-
-  const frag = document.createDocumentFragment();
-
-  RANGE_CACHE[months].forEach(row=>{
+  const tbody = document.createElement("tbody");
+  data.slice(0, MAX_ROWS_RENDER).forEach(row => {
     const tr = document.createElement("tr");
-
-    const tdDate = document.createElement("td");
-    tdDate.textContent = row.Date;
-    tdDate.className = "date";
-    tr.appendChild(tdDate);
-
-    COLUMNS.forEach(c=>{
+    headers.forEach(h => {
       const td = document.createElement("td");
-      const v = parseFloat(row[c.key]);
-
-      if (!isNaN(v)) {
-        td.textContent = c.heat ? v.toFixed(2) : Math.round(v);
-        if (c.heat) td.className = "bkt-" + bucket(v);
-      }
+      let val = row[h];
+      if (typeof val === "number") val = val.toFixed(2);
+      td.textContent = val ?? "";
+      if (h.endsWith(Z_COL_SUFFIX)) td.className = bucket(row[h]);
       tr.appendChild(td);
     });
-
-    frag.appendChild(tr);
+    tbody.appendChild(tr);
   });
-
-  tbody.appendChild(frag);
+  tbl.appendChild(tbody);
 }
-
-/* ================= RANGE CONTROL ================= */
-function setRange(m) {
-  CURRENT_RANGE = m;
-  document.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
-  document.getElementById("btn"+m).classList.add("active");
-  requestAnimationFrame(()=>renderBody(m));
-}
-
-/* ================= LOAD ================= */
-fetch(CSV_PATH)
-  .then(r=>r.text())
-  .then(text=>{
-    FULL_DATA = parseCSV(text);
-    buildHeader();
-    prepareRanges();
-    renderBody(CURRENT_RANGE);
-  })
-  .catch(err=>{
-    document.body.innerHTML += "<p style='color:red'>Failed to load CSV</p>";
-    console.error(err);
-  });
 </script>
-
 </body>
 </html>
