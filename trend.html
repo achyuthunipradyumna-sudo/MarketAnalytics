@@ -1,76 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Breadth</title>
-<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <meta charset="utf-8">
+  <title>Trend Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    select { margin-right: 12px; padding: 4px; }
+    #chart { width: 100%; height: 750px; }
+  </style>
 </head>
 <body>
 
-<h2>Breadth Dashboard</h2>
+<h2>Trend & Momentum</h2>
 
-<label>View:</label>
-<label><input type="radio" name="mode" value="z" checked>Z-Scores</label>
-<label><input type="radio" name="mode" value="raw">Raw</label>
+<label>Index:</label>
+<select id="index">
+  <option value="nifty50">NIFTY 50</option>
+  <option value="nifty_total">Total Market</option>
+</select>
 
-<div id="chart" style="height:800px;"></div>
+<div id="chart"></div>
 
 <script>
-const FILE = "data/history/breadth_full_history.csv";
-let rows = [];
+const DATA_URL = "data/history/breadth_full_history.csv";
+let raw;
 
-fetch(FILE).then(r=>r.text()).then(t=>{
-  const lines = t.trim().split("\n");
-  const h = lines[0].split(",");
-  rows = lines.slice(1).map(r=>{
-    const v = r.split(",");
-    let o={}; h.forEach((k,i)=>o[k]=v[i]); return o;
+fetch(DATA_URL)
+  .then(r => r.text())
+  .then(text => {
+    const rows = text.trim().split("\n");
+    const header = rows[0].split(",");
+    raw = rows.slice(1).map(r => {
+      const o = {};
+      r.split(",").forEach((v, i) => o[header[i]] = v);
+      return o;
+    });
+    render();
   });
-  draw();
-});
 
-function draw(){
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-  const x = rows.map(d=>d.Date);
+function render() {
+  const idx = document.getElementById("index").value;
+  const x = raw.map(d => new Date(d.Date));
 
   const traces = [
     {
-      x, y: rows.map(d=>+d.ad_z_50),
-      name:"Advance–Decline Z",
-      visible: mode==="z"
+      x, y: raw.map(d => +d[`${idx}_dist_200_z`]),
+      name: "Distance from 200 DMA (Z)",
+      line: {width: 2}
     },
     {
-      x, y: rows.map(d=>+d.pct_above_20dma_z),
-      name:"%>20DMA Z",
-      visible: mode==="z"
+      x, y: raw.map(d => +d[`${idx}_dma200_slope_pct`]),
+      name: "200 DMA Slope (%)",
+      yaxis: "y2"
     },
     {
-      x, y: rows.map(d=>+d.pct_above_50dma_z),
-      name:"%>50DMA Z",
-      visible: mode==="z"
-    },
-    {
-      x, y: rows.map(d=>+d.pct_above_200dma_z),
-      name:"%>200DMA Z",
-      visible: mode==="z"
-    },
-    {
-      x, y: rows.map(d=>+d.nhnl_z),
-      name:"NH–NL Z",
-      visible: mode==="z"
+      x, y: raw.map(d => +d[`${idx}_mom_126`]),
+      name: "6M Momentum",
+      yaxis: "y2"
     }
   ];
 
   Plotly.newPlot("chart", traces, {
-    title:"Market Breadth",
-    hovermode:"x unified",
-    yaxis:{zeroline:true},
-    legend:{orientation:"h"}
-  }, CONFIG);
+    title: idx.toUpperCase() + " Trend & Momentum",
+    hovermode: "x unified",
+    legend: {orientation: "h"},
+    yaxis: {title: "Trend (Z)"},
+    yaxis2: {
+      title: "Momentum / Slope",
+      overlaying: "y",
+      side: "right"
+    }
+  }, {
+    scrollZoom: false
+  });
 }
 
-document.querySelectorAll("input[name='mode']")
-  .forEach(r=>r.onchange=draw);
+document.getElementById("index").onchange = render;
 </script>
 
 </body>
