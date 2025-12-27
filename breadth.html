@@ -1,201 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Market Breadth – Heatmap</title>
+<meta charset="UTF-8">
+<title>Market Breadth Heat Map</title>
 
 <style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  margin: 16px;
-}
+  body {
+    font-family: Arial, sans-serif;
+    padding: 16px;
+  }
 
-h2 { margin-bottom: 10px; }
+  h3 {
+    margin-bottom: 8px;
+  }
 
-.controls {
-  margin-bottom: 12px;
-}
+  table {
+    border-collapse: collapse;
+    font-size: 13px;
+  }
 
-button, select {
-  padding: 6px 10px;
-  margin-right: 6px;
-  font-size: 14px;
-  cursor: pointer;
-}
+  th, td {
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    text-align: right;
+    min-width: 90px;
+  }
 
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 12px;
-}
+  th {
+    background: #f5f5f5;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
 
-th, td {
-  border: 1px solid #ddd;
-  padding: 4px 6px;
-  text-align: right;
-}
-
-th {
-  background: #f5f5f5;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-td.date {
-  text-align: left;
-  background: #fafafa;
-  font-weight: 600;
-}
-
-/* ---------- Z SCORE COLORS ---------- */
-.z-pos-strong { background:#1a9850; color:white; }
-.z-pos        { background:#91cf60; }
-.z-neutral    { background:#f7f7f7; }
-.z-neg        { background:#fc8d59; }
-.z-neg-strong { background:#d73027; color:white; }
-
-/* ---------- RAW % COLORS ---------- */
-.raw-pct-strong { background:#1a9850; color:white; }
-.raw-pct-pos    { background:#91cf60; }
-.raw-pct-mid    { background:#f7f7f7; }
-.raw-pct-neg    { background:#fdae61; }
-.raw-pct-bad    { background:#d73027; color:white; }
-
-/* ---------- RAW COUNT COLORS ---------- */
-.raw-pos { background:#a6d96a; }
-.raw-neg { background:#f46d43; color:white; }
-.raw-zero { background:#f7f7f7; }
+  td.date {
+    text-align: left;
+    font-weight: 600;
+    background: #fafafa;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
 </style>
 </head>
 
 <body>
 
-<h2>📊 Market Breadth — Participation & Internal Strength</h2>
+<h3>Market Breadth – % Stocks Above DMA</h3>
 
-<div class="controls">
-  View:
-  <button onclick="setMode('raw')">Raw</button>
-  <button onclick="setMode('z')">Z-Scores</button>
-
-  Lookback:
-  <select onchange="setLookback(this.value)">
-    <option value="21">1 Month</option>
-    <option value="63">3 Months</option>
-    <option value="126">6 Months</option>
-    <option value="252">1 Year</option>
-    <option value="all" selected>Full History</option>
-  </select>
-</div>
-
-<div id="table"></div>
+<table id="heatmap"></table>
 
 <script>
-let DATA = [];
-let MODE = "raw";
-let LOOKBACK = "all";
+// ===================================
+// CONFIG
+// ===================================
+const CSV_PATH = "data/history/breadth_full_history.csv";
 
-/* -------- COLUMN DEFINITIONS -------- */
-const RAW_COLS = [
-  {k:"adv", l:"Adv"},
-  {k:"dec", l:"Dec"},
-  {k:"ad",  l:"Net A/D"},
-  {k:"pct_above_20dma",  l:"% > 20DMA"},
-  {k:"pct_above_50dma",  l:"% > 50DMA"},
-  {k:"pct_above_200dma", l:"% > 200DMA"},
-  {k:"nh", l:"NH"},
-  {k:"nl", l:"NL"},
-  {k:"nhnl", l:"NH–NL"}
+// Columns to show (order matters)
+const COLUMNS = [
+  { key: "pct_above_20dma", label: "% > 20 DMA" },
+  { key: "pct_above_50dma", label: "% > 50 DMA" },
+  { key: "pct_above_200dma", label: "% > 200 DMA" }
 ];
 
-const Z_COLS = [
-  {k:"ad_z_50", l:"A/D Z(50)"},
-  {k:"pct_above_20dma_z", l:"%>20DMA Z"},
-  {k:"pct_above_50dma_z", l:"%>50DMA Z"},
-  {k:"pct_above_200dma_z", l:"%>200DMA Z"},
-  {k:"nhnl_z", l:"NH–NL Z"}
-];
-
-/* -------- FETCH DATA -------- */
-fetch("data/history/breadth_full_history.csv")
-.then(r => r.text())
-.then(text => {
-  const rows = text.trim().split("\n");
-  const headers = rows[0].split(",");
-  DATA = rows.slice(1).map(r => {
-    const v = r.split(",");
-    let o = {};
-    headers.forEach((h,i)=>o[h]=v[i]);
-    return o;
-  }).reverse(); // 🔑 LATEST DATE ON TOP
-  render();
-});
-
-function setMode(m){ MODE=m; render(); }
-function setLookback(l){ LOOKBACK=l; render(); }
-
-/* -------- COLOR LOGIC -------- */
-function zClass(v){
-  v = parseFloat(v);
-  if (v >= 1.5) return "z-pos-strong";
-  if (v >= 0.5) return "z-pos";
-  if (v > -0.5) return "z-neutral";
-  if (v > -1.5) return "z-neg";
-  return "z-neg-strong";
+// ===================================
+// EXCEL-STYLE PASTEL COLOR SCALE
+// ===================================
+function heatColor(v) {
+  if (v < 10) return "#8C3909";
+  if (v < 20) return "#C65A1E";
+  if (v < 30) return "#E08B5A";
+  if (v < 40) return "#F6C39F";
+  if (v < 45) return "#F4E6D6";
+  if (v <= 55) return "#F8F9F7"; // NEUTRAL
+  if (v <= 60) return "#E1F2E8";
+  if (v <= 70) return "#C0E5CC";
+  if (v <= 80) return "#8FD3C1";
+  if (v <= 90) return "#6AB5AC";
+  return "#3E8F88";
 }
 
-function rawPctClass(v){
-  v = parseFloat(v);
-  if (v >= 70) return "raw-pct-strong";
-  if (v >= 55) return "raw-pct-pos";
-  if (v >= 45) return "raw-pct-mid";
-  if (v >= 30) return "raw-pct-neg";
-  return "raw-pct-bad";
+function textColor(v) {
+  return (v >= 45 && v <= 55) ? "#000" : "#fff";
 }
 
-function rawCountClass(v){
-  v = parseInt(v);
-  if (v > 0) return "raw-pos";
-  if (v < 0) return "raw-neg";
-  return "raw-zero";
+// ===================================
+// CSV PARSER
+// ===================================
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const headers = lines[0].split(",");
+  return lines.slice(1).map(line => {
+    const values = line.split(",");
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = values[i]?.trim());
+    return obj;
+  });
 }
 
-/* -------- RENDER -------- */
-function render(){
-  let rows = DATA;
-  if (LOOKBACK !== "all"){
-    rows = rows.slice(0, parseInt(LOOKBACK));
-  }
+// ===================================
+// BUILD TABLE
+// ===================================
+function buildTable(data) {
+  const table = document.getElementById("heatmap");
+  table.innerHTML = "";
 
-  const cols = MODE==="z" ? Z_COLS : RAW_COLS;
+  // Header
+  const thead = document.createElement("thead");
+  const hrow = document.createElement("tr");
 
-  let html = "<table><tr><th>Date</th>";
-  cols.forEach(c=>html+=`<th>${c.l}</th>`);
-  html+="</tr>";
+  const thDate = document.createElement("th");
+  thDate.textContent = "Date";
+  hrow.appendChild(thDate);
 
-  rows.forEach(r=>{
-    html+=`<tr><td class="date">${r.Date}</td>`;
-    cols.forEach(c=>{
-      let val = r[c.k];
-      if (!val) val = "";
-
-      let cls="";
-      if (MODE==="z") cls = zClass(val);
-      else if (c.k.includes("pct_above")) cls = rawPctClass(val);
-      else cls = rawCountClass(val);
-
-      let disp = val;
-      if (c.k.includes("pct_above")) disp = (+val).toFixed(2);
-      else if (!isNaN(val)) disp = Math.round(val);
-
-      html+=`<td class="${cls}">${disp}</td>`;
-    });
-    html+="</tr>";
+  COLUMNS.forEach(c => {
+    const th = document.createElement("th");
+    th.textContent = c.label;
+    hrow.appendChild(th);
   });
 
-  html+="</table>";
-  document.getElementById("table").innerHTML = html;
+  thead.appendChild(hrow);
+  table.appendChild(thead);
+
+  // Body
+  const tbody = document.createElement("tbody");
+
+  // Latest date on top
+  data.reverse().forEach(row => {
+    const tr = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    tdDate.textContent = row.Date;
+    tdDate.className = "date";
+    tr.appendChild(tdDate);
+
+    COLUMNS.forEach(c => {
+      const val = parseFloat(row[c.key]);
+      const td = document.createElement("td");
+
+      if (!isNaN(val)) {
+        td.textContent = val.toFixed(2);
+        td.style.backgroundColor = heatColor(val);
+        td.style.color = textColor(val);
+      } else {
+        td.textContent = "";
+      }
+
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
 }
+
+// ===================================
+// LOAD CSV
+// ===================================
+fetch(CSV_PATH)
+  .then(resp => {
+    if (!resp.ok) throw new Error("Failed to load CSV");
+    return resp.text();
+  })
+  .then(text => buildTable(parseCSV(text)))
+  .catch(err => {
+    document.body.innerHTML += "<p style='color:red'>Error loading CSV</p>";
+    console.error(err);
+  });
 </script>
 
 </body>
