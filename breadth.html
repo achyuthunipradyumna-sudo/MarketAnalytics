@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>Market Breadth Heatmap</title>
 
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<!-- Reliable CDN for GitHub Pages -->
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
 body {
@@ -12,20 +13,23 @@ body {
   margin: 14px;
 }
 
-h2 { margin-bottom: 6px; }
+h2 {
+  margin: 0 0 8px 0;
+}
 
 .controls {
   margin-bottom: 10px;
 }
 
-button {
+.controls button {
   padding: 6px 10px;
   margin-right: 6px;
   border: 1px solid #ccc;
   background: #f5f5f5;
   cursor: pointer;
 }
-button.active {
+
+.controls button.active {
   background: #ddd;
   font-weight: 600;
 }
@@ -56,8 +60,9 @@ th {
   top: 0;
   z-index: 2;
 }
+
 /* ===== Brighter Excel-style heatmap palette ===== */
-.bkt-0  { background:#F44336; }  /* strong red */
+.bkt-0  { background:#F44336; color:#102010; font-weight:600; }
 .bkt-1  { background:#F77B72; }
 .bkt-2  { background:#F9B4AD; }
 .bkt-3  { background:#FCDDD9; }
@@ -67,21 +72,22 @@ th {
 .bkt-7  { background:#C9EBC9; }
 .bkt-8  { background:#9EDB9E; }
 .bkt-9  { background:#5FBF73; }
-.bkt-10 { background:#2E9E5E; } /* strong green */
+.bkt-10 { background:#2E9E5E; color:#102010; font-weight:600; }
 </style>
 </head>
 
 <body>
+
 <h2>Market Breadth – Heatmap</h2>
 
 <div class="controls">
-  <button onclick="setRange(1)">1M</button>
-  <button onclick="setRange(3)">3M</button>
-  <button onclick="setRange(6)">6M</button>
-  <button onclick="setRange(12)">1Y</button>
-  <button onclick="setRange(24)">2Y</button>
-  <button onclick="setRange(36)">3Y</button>
-  <button onclick="setRange(0)" class="active">Full</button>
+  <button onclick="setRange(1, this)">1M</button>
+  <button onclick="setRange(3, this)">3M</button>
+  <button onclick="setRange(6, this)">6M</button>
+  <button onclick="setRange(12, this)">1Y</button>
+  <button onclick="setRange(24, this)">2Y</button>
+  <button onclick="setRange(36, this)">3Y</button>
+  <button onclick="setRange(0, this)" class="active">Full</button>
 </div>
 
 <div class="table-wrap">
@@ -90,8 +96,8 @@ th {
 
 <script>
 /* ================= CONFIG ================= */
-const CSV_PATH = "data/history/breadth_full_history.csv";
-const MAX_ROWS_RENDER = 800;   // keeps DOM fast
+const CSV_PATH = "data/history/breadth_full_history.csv";   // relative path for GitHub Pages
+const MAX_ROWS_RENDER = 800;           // DOM safety
 const Z_COL_SUFFIX = "_z";
 
 /* ================= STATE ================= */
@@ -106,16 +112,25 @@ Papa.parse(CSV_PATH, {
   skipEmptyLines: true,
   worker: true,
   complete: res => {
-    rawData = res.data.sort((a,b)=> new Date(b.Date) - new Date(a.Date));
+    rawData = res.data
+      .filter(r => r.Date)
+      .sort((a, b) => new Date(b.Date) - new Date(a.Date));
+
     headers = res.meta.fields;
     render(rawData);
+  },
+  error: err => {
+    document.body.innerHTML =
+      "<h3 style='color:red'>CSV Load Error</h3><pre>" + err + "</pre>";
   }
 });
 
 /* ================= TIME RANGE ================= */
-function setRange(months) {
-  document.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
-  event.target.classList.add("active");
+function setRange(months, btn) {
+  document.querySelectorAll(".controls button")
+    .forEach(b => b.classList.remove("active"));
+
+  btn.classList.add("active");
 
   if (months === 0) {
     render(rawData);
@@ -124,10 +139,11 @@ function setRange(months) {
 
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - months);
+
   render(rawData.filter(r => new Date(r.Date) >= cutoff));
 }
 
-/* ================= HEATMAP ================= */
+/* ================= HEATMAP BUCKET ================= */
 function bucket(v) {
   if (v === null || v === undefined || isNaN(v)) return "";
   const z = Math.max(-3, Math.min(3, v));
@@ -150,6 +166,7 @@ function render(data) {
   tbl.appendChild(thead);
 
   const tbody = document.createElement("tbody");
+
   data.slice(0, MAX_ROWS_RENDER).forEach(row => {
     const tr = document.createElement("tr");
     headers.forEach(h => {
@@ -162,8 +179,17 @@ function render(data) {
     });
     tbody.appendChild(tr);
   });
+
   tbl.appendChild(tbody);
 }
+
+/* ================= DEV SAFETY ================= */
+window.onerror = function(msg, src, line) {
+  document.body.innerHTML =
+    "<h3 style='color:red'>JavaScript Error</h3>" +
+    "<pre>" + msg + "\nLine: " + line + "</pre>";
+};
 </script>
+
 </body>
 </html>
