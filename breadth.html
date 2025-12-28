@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Market Breadth – Colored Table</title>
+<title>Market Breadth – Base Heatmap</title>
 
 <style>
 body {
@@ -35,27 +35,60 @@ th {
 td.date {
   text-align: left;
   font-weight: 600;
+  white-space: nowrap;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Market Breadth (Excel-style Gradients)</h2>
+<h2>Market Breadth – Base (Excel-style Gradients)</h2>
 
 <table id="tbl">
 <thead>
 <tr>
   <th>Date</th>
+
+  <!-- Participation -->
+  <th>Adv %</th>
+  <th>Dec %</th>
+  <th>Unch %</th>
+
+  <!-- Trend -->
   <th>%&gt;20DMA</th>
   <th>%&gt;50DMA</th>
   <th>%&gt;200DMA</th>
-  <th>Adv</th>
-  <th>Dec</th>
-  <th>A/D</th>
+
+  <!-- Return buckets -->
+  <th>&gt;5%</th>
+  <th>4–5%</th>
+  <th>3–4%</th>
+  <th>2–3%</th>
+  <th>1–2%</th>
+  <th>0–1%</th>
+  <th>-1–0%</th>
+  <th>-2–-1%</th>
+  <th>-3–-2%</th>
+  <th>-4–-3%</th>
+  <th>-5–-4%</th>
+  <th>&lt;-5%</th>
+
+  <!-- Breakouts -->
+  <th>H20</th>
+  <th>L20</th>
+  <th>Δ20</th>
+
+  <th>H63</th>
+  <th>L63</th>
+  <th>Δ63</th>
+
+  <th>H126</th>
+  <th>L126</th>
+  <th>Δ126</th>
+
   <th>NH</th>
   <th>NL</th>
-  <th>NH–NL</th>
+  <th>Δ252</th>
 </tr>
 </thead>
 <tbody></tbody>
@@ -67,36 +100,41 @@ td.date {
 ========================= */
 
 const CSV_URL =
-  "https://achyuthunipradyumna-sudo.github.io/MarketAnalytics/data/history/breadth_full_history.csv";
+  "https://achyuthunipradyumna-sudo.github.io/MarketAnalytics/data/history/breadth_base.csv";
 
 const COLS = [
   "Date",
-  "pct_above_20dma",
-  "pct_above_50dma",
-  "pct_above_200dma",
-  "adv",
-  "dec",
-  "ad",
-  "nh",
-  "nl",
-  "nhnl"
+
+  "adv_pct", "dec_pct", "unch_pct",
+
+  "pct_above_20dma", "pct_above_50dma", "pct_above_200dma",
+
+  "ret_gt_5_pct", "ret_4_5_pct", "ret_3_4_pct", "ret_2_3_pct",
+  "ret_1_2_pct", "ret_0_1_pct",
+  "ret_m1_0_pct", "ret_m2_m1_pct", "ret_m3_m2_pct",
+  "ret_m4_m3_pct", "ret_m5_m4_pct", "ret_lt_m5_pct",
+
+  "high_20d_pct", "low_20d_pct", "hl_diff_20d_pct",
+  "high_63d_pct", "low_63d_pct", "hl_diff_63d_pct",
+  "high_126d_pct", "low_126d_pct", "hl_diff_126d_pct",
+  "high_252d_pct", "low_252d_pct", "hl_diff_252d_pct"
 ];
 
 /* =========================
-   COLORS
+   COLORS (UNCHANGED)
 ========================= */
 
-// Excel-like gradient for % above DMA
+// Excel-like gradient for percentages
 const RED = [215, 48, 39];
 const YELLOW = [255, 255, 191];
 const GREEN = [26, 152, 80];
 
-// Light sign-based colors for A/D & NH–NL
+// Light sign-based colors
 const LIGHT_GREEN = "rgb(220, 245, 220)";
 const LIGHT_RED   = "rgb(245, 220, 220)";
 
 /* =========================
-   HELPERS
+   HELPERS (UNCHANGED)
 ========================= */
 
 function lerp(a, b, t) {
@@ -139,8 +177,8 @@ fetch(CSV_URL)
 
     const tbody = document.querySelector("#tbl tbody");
 
-    // Latest date on top
-    lines.slice(1).reverse().forEach(line => {
+    // Latest date already on top in CSV
+    lines.slice(1).forEach(line => {
       const row = line.split(",");
       if (row.length !== header.length) return;
 
@@ -159,15 +197,18 @@ fetch(CSV_URL)
           } else {
             td.textContent = num.toFixed(2);
 
-            /* ---- Coloring logic ---- */
+            /* ---- Coloring logic (NO NEW COLORS) ---- */
 
-            // % Above DMA → gradient
-            if (col.startsWith("pct_above")) {
+            // Percent-type → gradient
+            if (
+              col.includes("pct") &&
+              !col.includes("hl_diff")
+            ) {
               td.style.background = pctColor(num);
             }
 
-            // A/D & NH–NL → sign only (FIXED)
-            if (col === "ad" || col === "nhnl") {
+            // HL diff → sign only
+            if (col.startsWith("hl_diff")) {
               if (num > 0) td.style.background = LIGHT_GREEN;
               else if (num < 0) td.style.background = LIGHT_RED;
             }
